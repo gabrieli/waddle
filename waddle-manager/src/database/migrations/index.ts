@@ -4,6 +4,7 @@
 
 import type Database from 'better-sqlite3';
 import { schema, indexes } from '../schema';
+import * as technicalDiscoveries from './003-technical-discoveries';
 
 export interface Migration {
   version: number;
@@ -27,6 +28,12 @@ export const migrations: Migration[] = [
         db.exec(sql);
       });
     }
+  },
+  {
+    version: 3,
+    name: 'technical_discoveries',
+    up: technicalDiscoveries.up,
+    down: technicalDiscoveries.down
   }
 ];
 
@@ -73,4 +80,23 @@ export class MigrationRunner {
       return [];
     }
   }
+}
+
+// Run migrations if this is the main module
+if (require.main === module) {
+  import('better-sqlite3').then(({ default: Database }) => {
+    const db = new Database('./waddle.db');
+    const runner = new MigrationRunner(db);
+    
+    runner.run()
+      .then(() => {
+        console.log('Migration completed successfully');
+        db.close();
+      })
+      .catch(error => {
+        console.error('Migration failed:', error);
+        db.close();
+        process.exit(1);
+      });
+  });
 }

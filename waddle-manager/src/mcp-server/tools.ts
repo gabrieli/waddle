@@ -20,6 +20,9 @@ const CreateFeatureSchema = z.object({
   description: z.string().min(1).max(1000),
   priority: z.enum(['low', 'normal', 'high', 'critical']).optional(),
   metadata: z.record(z.unknown()).optional(),
+  status: z.enum(['pending', 'in_progress', 'complete', 'failed']).optional(),
+  id: z.string().optional(),
+  skipInitialTask: z.boolean().optional(),
 });
 
 const GetProgressSchema = z.object({
@@ -76,6 +79,84 @@ const ReportTaskProgressSchema = z.object({
 
 export function createTools(db: Database, manager: WaddleManager): Record<string, MCPTool> {
   return {
+    startDevelopment: {
+      name: 'startDevelopment',
+      description: 'Start development mode to begin processing tasks',
+      parameters: {},
+      handler: async (): Promise<{ success: boolean; message: string }> => {
+        if (!manager) {
+          throw {
+            code: ErrorCodes.INVALID_REQUEST,
+            message: 'Manager not available',
+          };
+        }
+        
+        try {
+          manager.startDevelopment();
+          return {
+            success: true,
+            message: 'Development mode started',
+          };
+        } catch (error: any) {
+          throw {
+            code: ErrorCodes.INTERNAL_ERROR,
+            message: error.message,
+          };
+        }
+      },
+    },
+    
+    stopDevelopment: {
+      name: 'stopDevelopment',
+      description: 'Stop development mode to pause task processing',
+      parameters: {},
+      handler: async (): Promise<{ success: boolean; message: string }> => {
+        if (!manager) {
+          throw {
+            code: ErrorCodes.INVALID_REQUEST,
+            message: 'Manager not available',
+          };
+        }
+        
+        try {
+          manager.stopDevelopment();
+          return {
+            success: true,
+            message: 'Development mode stopped',
+          };
+        } catch (error: any) {
+          throw {
+            code: ErrorCodes.INTERNAL_ERROR,
+            message: error.message,
+          };
+        }
+      },
+    },
+    
+    getDevelopmentStatus: {
+      name: 'getDevelopmentStatus',
+      description: 'Get current development mode status',
+      parameters: {},
+      handler: async (): Promise<{ active: boolean; runningTasks: number; metrics: any }> => {
+        if (!manager) {
+          throw {
+            code: ErrorCodes.INVALID_REQUEST,
+            message: 'Manager not available',
+          };
+        }
+        
+        const active = manager.isDevelopmentMode();
+        const runningTasks = manager.getRunningTasks().length;
+        const metrics = manager.getMetrics();
+        
+        return {
+          active,
+          runningTasks,
+          metrics,
+        };
+      },
+    },
+    
     createFeature: {
       name: 'createFeature',
       description: 'Create a new feature for autonomous development',
@@ -95,22 +176,82 @@ export function createTools(db: Database, manager: WaddleManager): Record<string
           type: 'object',
           description: 'Additional metadata for the feature',
         },
+        status: {
+          type: 'string',
+          description: 'Initial status for the feature',
+          enum: ['pending', 'in_progress', 'complete', 'failed'],
+          default: 'pending',
+        },
+        id: {
+          type: 'string',
+          description: 'Custom ID for the feature (optional)',
+        },
+        skipInitialTask: {
+          type: 'boolean',
+          description: 'Skip creating initial architect task',
+          default: false,
+        },
       },
       handler: async (params: unknown): Promise<FeatureCreatedResponse> => {
         const validated = CreateFeatureSchema.parse(params);
         
-        const feature = db.features.create({
+        // Need to check if we can pass custom id and status to create method
+        const createDto: any = {
           description: validated.description,
           priority: validated.priority as Priority,
           metadata: validated.metadata,
-        });
+        };
+        
+        // If custom ID provided, we need to handle it differently
+        if (validated.id || validated.status !== 'pending') {
+          // Direct database insert for custom features
+          const id = validated.id || require('uuid').v4();
+          const now = Date.now();
+          
+          const stmt = db.prepare(`
+            INSERT INTO features (id, description, status, priority, created_at, updated_at, completed_at, metadata)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          `);
+          
+          stmt.run(
+            id,
+            validated.description,
+            validated.status || 'pending',
+            validated.priority || 'normal',
+            now,
+            now,
+            validated.status === 'complete' ? now : null,
+            validated.metadata ? JSON.stringify(validated.metadata) : null
+          );
+          
+          const feature = db.features.findById(id);
+          
+          // Create initial architect task unless skipped or completed
+          if (!validated.skipInitialTask && validated.status !== 'complete') {
+            db.tasks.create({
+              featureId: id,
+              role: 'architect',
+              description: `Design architecture for: ${validated.description}`,
+            });
+          }
+          
+          return {
+            id: id,
+            message: `Feature created successfully with ID: ${id}`,
+          };
+        }
+        
+        // Use standard create method for normal features
+        const feature = db.features.create(createDto);
 
-        // Create initial architect task
-        db.tasks.create({
-          featureId: feature.id,
-          role: 'architect',
-          description: `Design architecture for: ${feature.description}`,
-        });
+        // Create initial architect task unless skipped
+        if (!validated.skipInitialTask) {
+          db.tasks.create({
+            featureId: feature.id,
+            role: 'architect',
+            description: `Design architecture for: ${feature.description}`,
+          });
+        }
 
         return {
           id: feature.id,

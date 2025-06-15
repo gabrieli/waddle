@@ -10,17 +10,11 @@ import type { OrchestratorConfig } from './enhanced-orchestrator';
 export class WaddleManager extends EventEmitter {
   private orchestrator?: EnhancedOrchestrator;
 
-  constructor(
-    private db?: Database,
-    private config?: OrchestratorConfig
-  ) {
+  constructor() {
     super();
   }
 
   async initialize(db: Database, config?: OrchestratorConfig): Promise<void> {
-    this.db = db;
-    this.config = config;
-    
     this.orchestrator = new EnhancedOrchestrator(db, config);
     
     // Forward orchestrator events
@@ -42,6 +36,16 @@ export class WaddleManager extends EventEmitter {
     this.orchestrator.on('resumed', () => {
       console.log('▶️  Waddle resumed');
       this.emit('manager:resumed');
+    });
+    
+    this.orchestrator.on('development:started', () => {
+      console.log('🚀 Development mode started');
+      this.emit('development:started');
+    });
+    
+    this.orchestrator.on('development:stopped', () => {
+      console.log('🛑 Development mode stopped');
+      this.emit('development:stopped');
     });
     
     this.orchestrator.on('task:started', (data) => this.emit('task:started', data));
@@ -85,6 +89,24 @@ export class WaddleManager extends EventEmitter {
       throw new Error('WaddleManager not initialized. Call initialize() first.');
     }
     await this.orchestrator.resume();
+  }
+  
+  startDevelopment(): void {
+    if (!this.orchestrator) {
+      throw new Error('WaddleManager not initialized. Call initialize() first.');
+    }
+    this.orchestrator.startDevelopment();
+  }
+  
+  stopDevelopment(): void {
+    if (!this.orchestrator) {
+      throw new Error('WaddleManager not initialized. Call initialize() first.');
+    }
+    this.orchestrator.stopDevelopment();
+  }
+  
+  isDevelopmentMode(): boolean {
+    return this.orchestrator ? this.orchestrator.isDevelopmentMode() : false;
   }
 
   isRunning(): boolean {

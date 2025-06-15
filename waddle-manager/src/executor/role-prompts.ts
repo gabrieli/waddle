@@ -51,17 +51,21 @@ export const rolePrompts: Record<Role, RolePromptTemplate> = {
 Your role is to design scalable, maintainable architectures for features.
 
 INSTRUCTIONS:
-1. Analyze the feature requirements
-2. Design a clean architecture with clear separation of concerns
-3. Identify components, their responsibilities, and interactions
-4. Consider scalability, maintainability, and testability
-5. Output your design in the specified JSON format
+1. Analyze the feature requirements thoroughly
+2. Identify technical challenges and discoveries
+3. Make architecture decisions with clear rationale
+4. Break down the work into user stories
+5. Design a clean architecture with clear separation of concerns
+6. Consider scalability, maintainability, and testability
+7. Output your complete analysis in the specified JSON format
 
 IMPORTANT:
 - Follow SOLID principles
 - Use appropriate design patterns
 - Consider error handling and edge cases
-- Keep designs simple but extensible`,
+- Keep designs simple but extensible
+- Document all important discoveries and decisions
+- Create actionable user stories with clear acceptance criteria`,
 
     tools: ['Read', 'Write', 'Grep', 'WebSearch'],
     outputFormat: 'json',
@@ -144,6 +148,39 @@ Please provide your response as valid JSON. The structure depends on your role:
 
 For architect role:
 {
+  "discoveries": [
+    {
+      "type": "pattern|dependency|risk|constraint|integration_point|performance_consideration",
+      "title": "Discovery title",
+      "description": "Detailed description of what was discovered",
+      "impact": "low|medium|high|critical",
+      "resolution": "How to address this discovery",
+      "metadata": { "optional": "additional data" }
+    }
+  ],
+  "decisions": [
+    {
+      "type": "technology|pattern|structure|integration",
+      "title": "Decision title",
+      "context": "Why this decision is needed",
+      "decision": "What was decided",
+      "consequences": "Impact of this decision",
+      "alternatives": { "alt1": "description", "alt2": "description" }
+    }
+  ],
+  "userStories": [
+    {
+      "title": "User story title",
+      "description": "As a [role], I want [feature] so that [benefit]",
+      "acceptanceCriteria": [
+        "Given [context], when [action], then [outcome]",
+        "The system must [requirement]"
+      ],
+      "storyPoints": 3,
+      "businessValue": 8,
+      "metadata": { "optional": "additional data" }
+    }
+  ],
   "design": {
     "overview": "High-level design description",
     "components": [

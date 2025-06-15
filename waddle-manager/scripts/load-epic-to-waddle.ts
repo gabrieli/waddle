@@ -25,7 +25,7 @@ Key Features:
 - Self-Healing: Automatic recovery and improvement
 
 The system should be able to work autonomously, progressing features through all development phases without human intervention.`,
-  priority: 'urgent' as const
+  priority: 'critical' as const
 };
 
 const USER_STORIES = [
@@ -157,8 +157,7 @@ async function loadEpicAndStories() {
       } else if (story.status === 'complete') {
         // Mark feature as complete
         featureRepo.update(feature.id, { 
-          status: 'complete',
-          completedAt: new Date()
+          status: 'complete'
         });
       }
     } catch (error) {

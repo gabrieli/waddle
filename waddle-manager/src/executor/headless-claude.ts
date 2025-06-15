@@ -147,21 +147,21 @@ export class HeadlessClaudeExecutor extends EventEmitter {
       try {
         const args: string[] = [];
         
-        // Add prompt
-        args.push('-p', options.prompt);
+        // Add print flag for non-interactive mode
+        args.push('--print');
         
         // Add model if specified
         if (options.model) {
           args.push('--model', options.model);
         }
         
-        // Add tools
+        // Add allowed tools if specified
         if (options.tools && options.tools.length > 0) {
-          args.push('--tools', options.tools.join(','));
+          args.push('--allowedTools', options.tools.join(' '));
         }
         
-        // Add headless flag
-        args.push('--headless');
+        // Add the prompt as the last argument
+        args.push(options.prompt);
         
         // Spawn process
         const child = spawn(this.config.claudePath, args, {

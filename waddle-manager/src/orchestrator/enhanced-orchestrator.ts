@@ -4,14 +4,27 @@
 
 import { EventEmitter } from 'events';
 import type { Database } from 'better-sqlite3';
-import { FeatureRepository, TaskRepository, ContextRepository, AuditLogRepository } from '../database/repositories';
+import { 
+  FeatureRepository, 
+  TaskRepository, 
+  ContextRepository, 
+  AuditLogRepository,
+  TechnicalDiscoveryRepository,
+  UserStoryRepository,
+  ArchitectureDecisionRepository
+} from '../database/repositories';
 import { HeadlessClaudeExecutor } from '../executor/headless-claude';
 import { InteractiveClaudeExecutor } from '../executor/interactive-claude';
-import type { Feature, Task, FeatureStatus, TaskStatus, Role } from '../types';
+import type { Task, Role } from '../types';
 
 export interface OrchestratorConfig {
   checkIntervalMs?: number;
   maxConcurrentTasks?: number;
+  maxConcurrentByRole?: {
+    architect?: number;
+    developer?: number;
+    reviewer?: number;
+  };
   taskTimeoutMs?: number;
   maxTaskAttempts?: number;
   selfHealingEnabled?: boolean;
@@ -28,6 +41,7 @@ interface RunningTask {
 export class EnhancedOrchestrator extends EventEmitter {
   private running = false;
   private paused = false;
+  private developmentMode = false; // Controls whether to process tasks
   private checkInterval?: NodeJS.Timeout;
   private runningTasks = new Map<number, RunningTask>();
   
@@ -35,6 +49,9 @@ export class EnhancedOrchestrator extends EventEmitter {
   private taskRepo: TaskRepository;
   private contextRepo: ContextRepository;
   private auditRepo: AuditLogRepository;
+  private discoveryRepo: TechnicalDiscoveryRepository;
+  private userStoryRepo: UserStoryRepository;
+  private architectureRepo: ArchitectureDecisionRepository;
   
   private headlessExecutor: HeadlessClaudeExecutor;
   private interactiveExecutor: InteractiveClaudeExecutor;
@@ -42,7 +59,7 @@ export class EnhancedOrchestrator extends EventEmitter {
   private config: Required<OrchestratorConfig>;
   
   constructor(
-    private db: Database,
+    db: Database,
     config: OrchestratorConfig = {}
   ) {
     super();
@@ -52,6 +69,9 @@ export class EnhancedOrchestrator extends EventEmitter {
     this.taskRepo = new TaskRepository(db);
     this.contextRepo = new ContextRepository(db);
     this.auditRepo = new AuditLogRepository(db);
+    this.discoveryRepo = new TechnicalDiscoveryRepository(db);
+    this.userStoryRepo = new UserStoryRepository(db);
+    this.architectureRepo = new ArchitectureDecisionRepository(db);
     
     // Initialize executors
     this.headlessExecutor = new HeadlessClaudeExecutor({
@@ -59,14 +79,19 @@ export class EnhancedOrchestrator extends EventEmitter {
     });
     
     this.interactiveExecutor = new InteractiveClaudeExecutor({
-      claudePath: config.claudePath,
-      mcpServerUrl: config.mcpServerUrl
+      claudePath: config.claudePath
     });
     
     // Configure
     this.config = {
       checkIntervalMs: config.checkIntervalMs ?? 30000,
       maxConcurrentTasks: config.maxConcurrentTasks ?? 2,
+      maxConcurrentByRole: {
+        architect: config.maxConcurrentByRole?.architect ?? 20,
+        developer: config.maxConcurrentByRole?.developer ?? 1,
+        reviewer: config.maxConcurrentByRole?.reviewer ?? 5,
+        ...config.maxConcurrentByRole
+      },
       taskTimeoutMs: config.taskTimeoutMs ?? 3600000,
       maxTaskAttempts: config.maxTaskAttempts ?? 3,
       selfHealingEnabled: config.selfHealingEnabled ?? true,
@@ -87,11 +112,15 @@ export class EnhancedOrchestrator extends EventEmitter {
     this.paused = false;
     
     this.emit('started');
-    this.auditRepo.create('orchestrator', 'start', { config: this.config });
+    this.auditRepo.create({
+      action: 'start',
+      entityType: 'orchestrator',
+      details: { config: this.config }
+    });
     
     // Start the check loop
     this.checkInterval = setInterval(() => {
-      if (!this.paused) {
+      if (!this.paused && this.developmentMode) {
         this.processNextTasks().catch(error => {
           this.emit('error', error);
           
@@ -103,8 +132,10 @@ export class EnhancedOrchestrator extends EventEmitter {
       }
     }, this.config.checkIntervalMs);
     
-    // Process immediately
-    await this.processNextTasks();
+    // Process immediately if in development mode
+    if (this.developmentMode) {
+      await this.processNextTasks();
+    }
   }
   
   async stop(): Promise<void> {
@@ -124,39 +155,95 @@ export class EnhancedOrchestrator extends EventEmitter {
     await this.waitForRunningTasks();
     
     this.emit('stopped');
-    this.auditRepo.create('orchestrator', 'stop', {});
+    this.auditRepo.create({
+      action: 'stop',
+      entityType: 'orchestrator'
+    });
   }
   
   async pause(): Promise<void> {
     this.paused = true;
     this.emit('paused');
-    this.auditRepo.create('orchestrator', 'pause', {});
+    this.auditRepo.create({
+      action: 'pause',
+      entityType: 'orchestrator'
+    });
   }
   
   async resume(): Promise<void> {
     this.paused = false;
     this.emit('resumed');
-    this.auditRepo.create('orchestrator', 'resume', {});
+    this.auditRepo.create({
+      action: 'resume',
+      entityType: 'orchestrator'
+    });
+  }
+  
+  startDevelopment(): void {
+    if (!this.running) {
+      throw new Error('Orchestrator must be running to start development mode');
+    }
+    
+    this.developmentMode = true;
+    this.emit('development:started');
+    this.auditRepo.create({
+      action: 'start-development',
+      entityType: 'orchestrator'
+    });
+    
+    // Trigger immediate processing
+    this.processNextTasks().catch(error => {
+      this.emit('error', error);
+    });
+  }
+  
+  stopDevelopment(): void {
+    this.developmentMode = false;
+    this.emit('development:stopped');
+    this.auditRepo.create({
+      action: 'stop-development',
+      entityType: 'orchestrator'
+    });
+  }
+  
+  isDevelopmentMode(): boolean {
+    return this.developmentMode;
   }
   
   private async processNextTasks(): Promise<void> {
-    // Check if we can take more tasks
-    if (this.runningTasks.size >= this.config.maxConcurrentTasks) {
-      return;
-    }
-    
     // Check for stuck tasks and handle them
     await this.checkStuckTasks();
     
+    // Count running tasks by role
+    const runningByRole: Record<Role, number> = {
+      architect: 0,
+      developer: 0,
+      reviewer: 0
+    };
+    
+    for (const running of this.runningTasks.values()) {
+      runningByRole[running.task.role]++;
+    }
+    
     // Get pending tasks
-    const availableSlots = this.config.maxConcurrentTasks - this.runningTasks.size;
-    const pendingTasks = this.taskRepo.findPendingTasks(availableSlots);
+    const pendingTasks = this.taskRepo.findPendingTasks(100); // Get more tasks to filter by role
     
     for (const task of pendingTasks) {
-      // Skip if feature is paused or cancelled
+      // Skip if feature is failed or complete
       const feature = this.featureRepo.findById(task.featureId);
-      if (!feature || feature.status === 'paused' || feature.status === 'cancelled') {
+      if (!feature || feature.status === 'failed' || feature.status === 'complete') {
         continue;
+      }
+      
+      // Check role-based concurrency limit
+      const roleLimit = this.config.maxConcurrentByRole?.[task.role] ?? this.config.maxConcurrentTasks;
+      if (runningByRole[task.role] >= roleLimit) {
+        continue; // Skip this task, role limit reached
+      }
+      
+      // Check global limit
+      if (this.runningTasks.size >= this.config.maxConcurrentTasks) {
+        break; // Stop processing, global limit reached
       }
       
       // Check if task has exceeded max attempts
@@ -167,6 +254,7 @@ export class EnhancedOrchestrator extends EventEmitter {
       
       // Start the task
       await this.executeTask(task);
+      runningByRole[task.role]++; // Update counter
     }
   }
   
@@ -200,13 +288,13 @@ export class EnhancedOrchestrator extends EventEmitter {
         ? await this.headlessExecutor.execute({
             role: task.role,
             task,
-            context,
+            context: context as any, // Type conversion for compatibility
             timeout: this.config.taskTimeoutMs
           })
         : await this.interactiveExecutor.execute({
             role: task.role,
             task,
-            context,
+            context: context as any, // Type conversion for compatibility
             timeout: this.config.taskTimeoutMs
           });
       
@@ -230,12 +318,20 @@ export class EnhancedOrchestrator extends EventEmitter {
       output
     });
     
+    // Process architect output to create proper artifacts
+    if (task.role === 'architect' && output) {
+      await this.processArchitectOutput(task, output);
+    }
+    
     // Store context for next tasks
+    const contextType = task.role === 'architect' ? 'architecture' : 
+                      task.role === 'developer' ? 'implementation' : 'review';
+    
     this.contextRepo.create({
       featureId: task.featureId,
-      role: task.role,
-      content: output,
-      metadata: { taskId: task.id }
+      type: contextType,
+      content: JSON.stringify(output),
+      author: task.role
     });
     
     this.emit('task:completed', { task, output });
@@ -245,6 +341,89 @@ export class EnhancedOrchestrator extends EventEmitter {
     
     // Create next task in pipeline
     await this.createNextTask(task);
+  }
+
+  private async processArchitectOutput(task: Task, output: any): Promise<void> {
+    try {
+      // Extract technical discoveries
+      if (output.discoveries && Array.isArray(output.discoveries)) {
+        for (const discovery of output.discoveries) {
+          await this.discoveryRepo.create({
+            featureId: task.featureId,
+            discoveryType: discovery.type || 'pattern',
+            title: discovery.title || 'Untitled Discovery',
+            description: discovery.description || '',
+            impact: discovery.impact || 'medium',
+            resolutionStrategy: discovery.resolution,
+            metadata: discovery.metadata
+          });
+        }
+      }
+
+      // Extract architecture decisions
+      if (output.decisions && Array.isArray(output.decisions)) {
+        for (const decision of output.decisions) {
+          await this.architectureRepo.create({
+            featureId: task.featureId,
+            decisionType: decision.type || 'pattern',
+            title: decision.title || 'Untitled Decision',
+            context: decision.context || '',
+            decision: decision.decision || '',
+            consequences: decision.consequences,
+            alternativesConsidered: decision.alternatives,
+            author: 'architect'
+          });
+        }
+      }
+
+      // Extract and create user stories
+      if (output.userStories && Array.isArray(output.userStories)) {
+        for (const story of output.userStories) {
+          const createdStory = await this.userStoryRepo.create({
+            epicId: task.featureId,
+            title: story.title || 'Untitled Story',
+            description: story.description || '',
+            acceptanceCriteria: story.acceptanceCriteria || [],
+            storyPoints: story.storyPoints,
+            businessValue: story.businessValue,
+            status: 'ready',
+            metadata: story.metadata
+          });
+
+          // Create developer tasks for each user story
+          const devTask = await this.taskRepo.create({
+            featureId: task.featureId,
+            role: 'developer',
+            description: `Implement user story: ${createdStory.title}`
+          });
+
+          // Link the user story to the task
+          await this.userStoryRepo.linkToTask(createdStory.id, devTask.id);
+        }
+      }
+
+      // If no user stories were created but we have design output, create a single developer task
+      if (!output.userStories || output.userStories.length === 0) {
+        const feature = await this.featureRepo.findById(task.featureId);
+        if (feature) {
+          await this.taskRepo.create({
+            featureId: task.featureId,
+            role: 'developer',
+            description: `Implement solution for: ${feature.description}`
+          });
+        }
+      }
+
+      this.emit('architect:processed', { 
+        task, 
+        discoveries: output.discoveries?.length || 0,
+        decisions: output.decisions?.length || 0,
+        userStories: output.userStories?.length || 0
+      });
+    } catch (error) {
+      this.emit('architect:processing-error', { task, error });
+      // Don't throw - we still want the task to complete even if artifact creation fails
+    }
   }
   
   private async handleFailedTask(task: Task, error: string): Promise<void> {
@@ -264,7 +443,7 @@ export class EnhancedOrchestrator extends EventEmitter {
       // Update feature status to blocked if critical task failed
       const feature = this.featureRepo.findById(task.featureId);
       if (feature && feature.status === 'in_progress') {
-        this.featureRepo.update(task.featureId, { status: 'blocked' });
+        this.featureRepo.update(task.featureId, { status: 'failed' });
         
         // Create a self-healing task to unblock
         if (this.config.selfHealingEnabled) {
@@ -326,8 +505,7 @@ export class EnhancedOrchestrator extends EventEmitter {
     
     if (allComplete && tasks.length >= 3) { // architect, developer, reviewer
       this.featureRepo.update(featureId, { 
-        status: 'complete',
-        completedAt: new Date()
+        status: 'complete'
       });
       
       this.emit('feature:completed', { featureId });
@@ -352,7 +530,7 @@ export class EnhancedOrchestrator extends EventEmitter {
   
   private async buildTaskContext(task: Task): Promise<Array<{ role: string; content: any }>> {
     // Get all context for the feature
-    const contexts = this.contextRepo.findByFeatureId(task.featureId);
+    const contexts = this.contextRepo.findByFeature(task.featureId);
     
     // Get feature description
     const feature = this.featureRepo.findById(task.featureId);
@@ -366,13 +544,41 @@ export class EnhancedOrchestrator extends EventEmitter {
       });
     }
     
-    // Add relevant contexts based on role
+    // Add relevant contexts based on type
     for (const ctx of contexts) {
-      // Don't include context from the same role
-      if (ctx.role !== task.role) {
+      result.push({
+        role: ctx.type,
+        content: JSON.parse(ctx.content)
+      });
+    }
+    
+    // Add technical discoveries for developer and reviewer tasks
+    if (task.role === 'developer' || task.role === 'reviewer') {
+      const discoveries = this.discoveryRepo.findByFeatureId(task.featureId);
+      if (discoveries.length > 0) {
         result.push({
-          role: ctx.role,
-          content: ctx.content
+          role: 'technical_discoveries',
+          content: discoveries
+        });
+      }
+    }
+    
+    // Add architecture decisions for developer tasks
+    if (task.role === 'developer') {
+      const decisions = this.architectureRepo.findByFeatureId(task.featureId);
+      if (decisions.length > 0) {
+        result.push({
+          role: 'architecture_decisions',
+          content: decisions
+        });
+      }
+      
+      // Add user stories linked to this task
+      const userStories = this.userStoryRepo.findStoriesByTaskId(task.id);
+      if (userStories.length > 0) {
+        result.push({
+          role: 'user_stories',
+          content: userStories
         });
       }
     }
@@ -396,28 +602,29 @@ export class EnhancedOrchestrator extends EventEmitter {
       const result = await this.headlessExecutor.execute({
         role: 'architect',
         task: analysisTask,
-        context: [
-          { role: 'failed-task', content: { task, error } },
-          { role: 'instruction', content: 'Analyze why this task failed and suggest a recovery strategy. Return JSON with: { retry: boolean, modifiedPrompt?: string, additionalContext?: string }' }
-        ],
+        context: [] as any, // Empty context array for analysis
         timeout: 30000
       });
       
-      if (result.success && result.output.retry) {
-        // Retry with modifications
-        if (result.output.modifiedPrompt) {
-          task.description = result.output.modifiedPrompt;
-        }
-        
-        // Reset status to pending for retry
-        this.taskRepo.update(task.id, { status: 'pending' });
-        
-        if (result.output.additionalContext) {
-          this.contextRepo.create({
-            featureId: task.featureId,
-            role: 'recovery-context',
-            content: result.output.additionalContext
-          });
+      if (result.success && result.output) {
+        const analysisOutput = result.output as any;
+        if (analysisOutput.retry) {
+          // Retry with modifications
+          if (analysisOutput.modifiedPrompt) {
+            task.description = analysisOutput.modifiedPrompt;
+          }
+          
+          // Reset status to pending for retry
+          this.taskRepo.update(task.id, { status: 'pending' });
+          
+          if (analysisOutput.additionalContext) {
+            this.contextRepo.create({
+              featureId: task.featureId,
+              type: 'implementation',
+              content: JSON.stringify(analysisOutput.additionalContext),
+              author: 'self-healing'
+            });
+          }
         }
       }
     } catch (recoveryError) {
@@ -434,7 +641,7 @@ export class EnhancedOrchestrator extends EventEmitter {
     // Check if self-healing feature exists
     let healingFeature = this.featureRepo.findAll({ 
       status: ['pending', 'in_progress'] 
-    }).find(f => f.id === 'waddle-self-healing');
+    }).find(f => f.metadata && (f.metadata as any).system === true);
     
     if (!healingFeature) {
       healingFeature = this.featureRepo.create({
@@ -495,7 +702,7 @@ export class EnhancedOrchestrator extends EventEmitter {
         pending: features.filter(f => f.status === 'pending').length,
         inProgress: features.filter(f => f.status === 'in_progress').length,
         complete: features.filter(f => f.status === 'complete').length,
-        blocked: features.filter(f => f.status === 'blocked').length
+        failed: features.filter(f => f.status === 'failed').length
       },
       tasks: {
         total: allTasks.length,
