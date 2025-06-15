@@ -2,7 +2,7 @@
  * Main orchestrator module
  */
 
-export class Waddle {
+export class WaddleManager {
   private running = false;
 
   async start(): Promise<void> {
@@ -25,3 +25,6 @@ export class Waddle {
     return this.running;
   }
 }
+
+// Legacy alias for backward compatibility
+export { WaddleManager as Waddle };

@@ -16,7 +16,7 @@ export interface Feature {
   createdAt: Date;
   updatedAt: Date;
   completedAt?: Date;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface Task {
@@ -29,7 +29,7 @@ export interface Task {
   createdAt: Date;
   startedAt?: Date;
   completedAt?: Date;
-  output?: any;
+  output?: unknown;
   error?: string;
 }
 
@@ -42,7 +42,7 @@ export interface Transition {
   reason?: string;
   actor: Actor;
   createdAt: Date;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface Context {
@@ -60,7 +60,7 @@ export interface AuditEntry {
   entityType?: string;
   entityId?: string;
   actor?: string;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
   createdAt: Date;
 }
 
@@ -73,7 +73,7 @@ export interface ExecutionRequest {
 
 export interface ExecutionResult {
   success: boolean;
-  output?: any;
+  output?: unknown;
   error?: string;
   duration: number;
 }
