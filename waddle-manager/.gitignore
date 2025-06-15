@@ -1,0 +1,59 @@
+# Dependencies
+node_modules
+.pnp
+.pnp.js
+
+# Build outputs
+dist
+bin/waddle.js
+*.tsbuildinfo
+
+# Testing
+coverage
+.nyc_output
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.swp
+*.swo
+
+# Database
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+.cache
+
+# Package files
+*.tgz
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
