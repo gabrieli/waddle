@@ -8,8 +8,8 @@
 
 ### Phase 2 - Core Engine
 - [x] Story 3: MCP Server Implementation
-- [x] Story 4: Headless Claude Executor (Being Replaced)
-- [ ] Story 11: Interactive Claude Executor (Architecture Update)
+- [x] Story 4: Headless Claude Executor (Still used for architect/reviewer)
+- [x] Story 11: Hybrid Claude Executor (Architecture Update)
 - [x] Story 12: Task Completion MCP Tools
 - [ ] Story 5: Autonomous Orchestrator Engine
 
@@ -557,26 +557,43 @@ examples/
 
 ---
 
-## Story 11: Interactive Claude Executor (Architecture Update)
+## Story 11: Hybrid Claude Executor (Architecture Update)
 
-**Status**: ⬜ Not Started
+**Status**: ✅ Completed
 
 **As a** manager system  
-**I want** to spawn interactive Claude Code instances instead of headless mode  
-**So that** development tasks can be completed with full iterative capabilities
+**I want** to use a hybrid approach with interactive Claude for developers and headless for architects/reviewers  
+**So that** each role gets the appropriate execution environment for their needs
 
 ### Acceptance Criteria
-- [ ] Update executor to spawn interactive Claude instances
-- [ ] Pass task context via initial prompt
-- [ ] Monitor Claude process output
-- [ ] Detect when Claude calls completion tool
-- [ ] Parse task output from completion tool call
-- [ ] Clean process termination after task completion
-- [ ] Handle timeouts for long-running tasks
-- [ ] Support for multiple concurrent Claude instances
+- [x] Keep headless executor for architect and reviewer roles
+- [x] Create interactive executor for developer role only
+- [x] Route tasks to appropriate executor based on role
+- [x] Pass task context via initial prompt for interactive mode
+- [x] Monitor Claude process output for completion detection
+- [x] Parse task output from MCP tool calls
+- [x] Clean process termination after task completion
+- [x] Handle timeouts for long-running tasks
+- [x] Support for multiple concurrent Claude instances
 
 ### Technical Details
 ```typescript
+// src/executor/hybrid-executor.ts
+class HybridClaudeExecutor {
+  private headlessExecutor: HeadlessClaudeExecutor;
+  private interactiveExecutor: InteractiveClaudeExecutor;
+  
+  async execute(request: ExecutionRequest): Promise<ExecutionResult> {
+    // Use interactive mode only for developer role
+    if (request.role === 'developer') {
+      return this.interactiveExecutor.execute(request);
+    }
+    
+    // Use headless mode for architect and reviewer roles
+    return this.headlessExecutor.execute(request);
+  }
+}
+
 // src/executor/interactive-claude.ts
 class InteractiveClaudeExecutor {
   async execute(request: ExecutionRequest): Promise<ExecutionResult> {
@@ -711,9 +728,9 @@ export const taskCompletionTools = {
 
 ### Summary
 - **Total Stories**: 12
-- **Completed**: 5
+- **Completed**: 6
 - **In Progress**: 0
-- **Not Started**: 7
+- **Not Started**: 6
 
 ### Next Steps
 1. ~~Start with Story 1 (Core Infrastructure)~~ ✅
@@ -723,7 +740,8 @@ export const taskCompletionTools = {
 5. ~~Story 3 (MCP Server Implementation)~~ ✅
 6. ~~Story 4 (Headless Claude Executor)~~ ✅
 7. ~~Story 12 (Task Completion MCP Tools)~~ ✅
-8. **Next**: Story 11 (Interactive Claude Executor) - This should be done before Story 5 as it changes the fundamental execution model
+8. ~~Story 11 (Hybrid Claude Executor)~~ ✅
+9. **Next**: Story 5 (Autonomous Orchestrator Engine) - The final piece to make Waddle self-sufficient!
 
 ### Notes for Resuming Work
 - Check this document for current progress
