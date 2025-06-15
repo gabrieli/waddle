@@ -85,3 +85,90 @@ MIT © Waddle
 ---
 
 Built with 🐧🐧🐧🐧🐧 by Waddle
+
+## Enhanced Orchestrator with Self-Healing
+
+The enhanced orchestrator now provides autonomous operation with self-healing capabilities:
+
+### Features
+
+- **Autonomous Processing**: Continuously polls for pending tasks and processes them
+- **Self-Healing**: Automatically detects and recovers from failures
+- **Local Database**: Uses SQLite for all state management (no GitHub dependency)
+- **Intelligent Task Routing**: Uses headless Claude for AI reasoning
+- **Concurrent Execution**: Manages multiple tasks in parallel
+- **Automatic Recovery**: Retries failed tasks with enriched context
+
+### Task Pipeline
+
+1. **Architect** → Creates technical design
+2. **Developer** → Implements based on design  
+3. **Reviewer** → Reviews implementation
+4. Feature marked complete when all tasks pass
+
+### Configuration
+
+```typescript
+const config: OrchestratorConfig = {
+  checkIntervalMs: 30000,      // How often to check for work
+  maxConcurrentTasks: 2,       // Parallel execution limit
+  taskTimeoutMs: 3600000,      // 1 hour timeout
+  maxTaskAttempts: 3,          // Retry limit
+  selfHealingEnabled: true,    // Enable self-healing
+  claudePath: 'claude',        // Path to Claude CLI
+  mcpServerUrl: 'http://localhost:5173'
+};
+```
+
+### Loading Epic and User Stories
+
+To load all Waddle development tasks:
+
+```bash
+npx ts-node scripts/load-epic-to-waddle.ts
+```
+
+This will:
+- Create the main epic in the database
+- Add all 15 user stories as features
+- Create initial architect tasks for pending stories
+- Mark completed stories as done
+
+### Starting Autonomous Processing
+
+```bash
+npm start
+```
+
+Waddle will now:
+- Process all pending tasks automatically
+- Progress features through the development pipeline
+- Self-heal when encountering issues
+- Create improvement tasks for itself
+
+### Monitoring
+
+The orchestrator provides real-time metrics:
+
+```javascript
+const metrics = orchestrator.getMetrics();
+// Returns:
+// {
+//   features: { total, pending, inProgress, complete, blocked },
+//   tasks: { total, pending, inProgress, complete, failed },
+//   orchestrator: { running, paused, runningTasks, maxConcurrent }
+// }
+```
+
+## Ready for Full Autonomous Operation
+
+✅ **Confirmed**: Waddle is now ready to autonomously complete the remaining project tasks:
+
+1. **Local Database Management** - No GitHub dependencies
+2. **Headless Claude Integration** - AI reasoning powered by Claude
+3. **Self-Healing Capabilities** - Automatically recovers from failures
+4. **Task Pipeline** - Architect → Developer → Reviewer workflow
+5. **Concurrent Processing** - Handles multiple tasks efficiently
+6. **Automatic Task Creation** - Creates follow-up tasks as needed
+
+Simply run `npm start` and Waddle will autonomously process all remaining user stories!

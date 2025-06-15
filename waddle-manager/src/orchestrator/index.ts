@@ -3,57 +3,114 @@
  */
 
 import { EventEmitter } from 'events';
+import { EnhancedOrchestrator } from './enhanced-orchestrator';
+import type { Database } from 'better-sqlite3';
+import type { OrchestratorConfig } from './enhanced-orchestrator';
 
 export class WaddleManager extends EventEmitter {
-  private running = false;
-  private paused = false;
+  private orchestrator?: EnhancedOrchestrator;
 
-  constructor() {
+  constructor(
+    private db?: Database,
+    private config?: OrchestratorConfig
+  ) {
     super();
   }
 
+  async initialize(db: Database, config?: OrchestratorConfig): Promise<void> {
+    this.db = db;
+    this.config = config;
+    
+    this.orchestrator = new EnhancedOrchestrator(db, config);
+    
+    // Forward orchestrator events
+    this.orchestrator.on('started', () => {
+      console.log('🐧 Waddle starting...');
+      this.emit('manager:started');
+    });
+    
+    this.orchestrator.on('stopped', () => {
+      console.log('🐧 Waddle stopped');
+      this.emit('manager:stopped');
+    });
+    
+    this.orchestrator.on('paused', () => {
+      console.log('⏸️  Waddle paused');
+      this.emit('manager:paused');
+    });
+    
+    this.orchestrator.on('resumed', () => {
+      console.log('▶️  Waddle resumed');
+      this.emit('manager:resumed');
+    });
+    
+    this.orchestrator.on('task:started', (data) => this.emit('task:started', data));
+    this.orchestrator.on('task:completed', (data) => this.emit('task:completed', data));
+    this.orchestrator.on('task:failed', (data) => this.emit('task:failed', data));
+    this.orchestrator.on('feature:completed', (data) => this.emit('feature:completed', data));
+    this.orchestrator.on('self-healing:created', (data) => {
+      console.log(`🔧 Self-healing task created: ${data.type}`);
+      this.emit('self-healing:created', data);
+    });
+    
+    this.orchestrator.on('error', (error) => {
+      console.error('❌ Orchestrator error:', error);
+      this.emit('error', error);
+    });
+  }
+
   async start(): Promise<void> {
-    this.running = true;
-    this.paused = false;
-    // eslint-disable-next-line no-console
-    console.log('🐧 Waddle starting...');
-    this.emit('manager:started');
-    // TODO: Add actual async initialization
-    await Promise.resolve();
+    if (!this.orchestrator) {
+      throw new Error('WaddleManager not initialized. Call initialize() first.');
+    }
+    await this.orchestrator.start();
   }
 
   async stop(): Promise<void> {
-    this.running = false;
-    this.paused = false;
-    // eslint-disable-next-line no-console
-    console.log('🐧 Waddle stopped');
-    this.emit('manager:stopped');
-    // TODO: Add actual async cleanup
-    await Promise.resolve();
+    if (!this.orchestrator) {
+      throw new Error('WaddleManager not initialized. Call initialize() first.');
+    }
+    await this.orchestrator.stop();
   }
 
   async pause(): Promise<void> {
-    this.paused = true;
-    // eslint-disable-next-line no-console
-    console.log('⏸️  Waddle paused');
-    await Promise.resolve();
+    if (!this.orchestrator) {
+      throw new Error('WaddleManager not initialized. Call initialize() first.');
+    }
+    await this.orchestrator.pause();
   }
 
   async resume(): Promise<void> {
-    this.paused = false;
-    // eslint-disable-next-line no-console
-    console.log('▶️  Waddle resumed');
-    await Promise.resolve();
+    if (!this.orchestrator) {
+      throw new Error('WaddleManager not initialized. Call initialize() first.');
+    }
+    await this.orchestrator.resume();
   }
 
   isRunning(): boolean {
-    return this.running;
+    return this.orchestrator ? true : false;
   }
 
   isPaused(): boolean {
-    return this.paused;
+    return false; // Will be implemented when orchestrator provides this
+  }
+  
+  getMetrics(): any {
+    if (!this.orchestrator) {
+      throw new Error('WaddleManager not initialized. Call initialize() first.');
+    }
+    return this.orchestrator.getMetrics();
+  }
+  
+  getRunningTasks(): any[] {
+    if (!this.orchestrator) {
+      return [];
+    }
+    return this.orchestrator.getRunningTasks();
   }
 }
 
 // Legacy alias for backward compatibility
 export { WaddleManager as Waddle };
+export { EnhancedOrchestrator };
+export type { OrchestratorConfig };

@@ -35,7 +35,9 @@
     "format": "prettier --write \"src/**/*.{ts,tsx,json,md}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,json,md}\"",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run build && npm run test && npm run lint"
+    "prepublishOnly": "npm run build && npm run test && npm run lint",
+    "scripts:load-epic": "ts-node scripts/load-epic-to-waddle.ts",
+    "db:migrate": "ts-node src/database/migrations/index.ts"
   },
   "dependencies": {
     "better-sqlite3": "^11.5.0",
