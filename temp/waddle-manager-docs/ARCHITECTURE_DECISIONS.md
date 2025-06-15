@@ -1,7 +1,7 @@
-# Architecture Decisions - Waddle Manager
+# Architecture Decisions - Waddle
 
 ## Overview
-This document captures key architectural decisions made during the design of Waddle Manager, including the rationale and trade-offs considered.
+This document captures key architectural decisions made during the design of Waddle, including the rationale and trade-offs considered.
 
 ## Decision Log
 
@@ -85,7 +85,7 @@ This document captures key architectural decisions made during the design of Wad
 **Status**: Accepted  
 **Date**: 2024-01-15
 
-**Context**: Need a way for Claude Code to interact with Manager.
+**Context**: Need a way for Claude Code to interact with Waddle.
 
 **Decision**: Implement MCP server protocol for tool exposure.
 

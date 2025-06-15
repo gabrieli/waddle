@@ -13,7 +13,7 @@ Build a complete autonomous development orchestration system that manages softwa
 ## Acceptance Criteria
 
 ### 1. Core Functionality
-- [ ] Manager runs as a persistent background service
+- [ ] Waddle runs as a persistent background service
 - [ ] Accepts feature requests via MCP interface from Claude Code
 - [ ] Automatically orchestrates work through architecture → development → review → testing phases
 - [ ] Spawns headless Claude instances with appropriate role contexts

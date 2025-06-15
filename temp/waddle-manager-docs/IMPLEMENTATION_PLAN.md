@@ -1,8 +1,8 @@
-# Implementation Plan - Waddle Manager
+# Implementation Plan - Waddle
 
 ## Quick Reference
 
-This document provides a quick reference for implementing Waddle Manager, including the order of implementation and key checkpoints.
+This document provides a quick reference for implementing Waddle, including the order of implementation and key checkpoints.
 
 ## Implementation Phases
 
@@ -38,7 +38,7 @@ This document provides a quick reference for implementing Waddle Manager, includ
 - [ ] Write integration tests
 - [ ] Test with Claude Code
 
-**Checkpoint**: Can interact with Manager via Claude Code
+**Checkpoint**: Can interact with Waddle via Claude Code
 
 #### Day 9-11: Headless Executor (Story 4)
 - [ ] Create Claude spawning logic

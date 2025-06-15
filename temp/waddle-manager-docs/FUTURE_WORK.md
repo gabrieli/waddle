@@ -1,8 +1,8 @@
-# Future Work - Waddle Manager
+# Future Work - Waddle
 
 ## Post-MVP Features
 
-This document outlines potential features and improvements for future versions of Waddle Manager after the initial MVP release.
+This document outlines potential features and improvements for future versions of Waddle after the initial MVP release.
 
 ## Version 2.0 Features
 
@@ -296,4 +296,4 @@ Track these for each new feature:
 
 ## Conclusion
 
-This roadmap is intentionally ambitious. Not all features will be implemented, but they represent the vision for where Waddle Manager could evolve. Community feedback and real-world usage will drive actual prioritization.
+This roadmap is intentionally ambitious. Not all features will be implemented, but they represent the vision for where Waddle could evolve. Community feedback and real-world usage will drive actual prioritization.
