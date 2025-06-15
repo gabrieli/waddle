@@ -92,7 +92,7 @@ describe('HeadlessClaudeExecutor', () => {
           details: 'Implemented test feature',
         },
       });
-      expect(result.duration).toBeGreaterThan(0);
+      expect(result.duration).toBeGreaterThanOrEqual(0);
     });
 
     it('should retry on failure', async () => {

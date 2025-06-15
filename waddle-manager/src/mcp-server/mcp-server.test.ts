@@ -6,6 +6,7 @@ import { MCPServer } from './index';
 import { Database } from '../database';
 import { WaddleManager } from '../orchestrator';
 import type { JSONRPCRequest, JSONRPCResponse } from './types';
+import { ErrorCodes } from './types';
 import * as fs from 'fs';
 import * as http from 'http';
 import { io as ioClient, Socket } from 'socket.io-client';
@@ -136,7 +137,7 @@ describe('MCPServer', () => {
 
       expect(response.ok).toBe(true);
       expect(tools).toBeInstanceOf(Array);
-      expect(tools.length).toBe(6);
+      expect(tools.length).toBe(8);
       
       const toolNames = tools.map((t) => t.name);
       expect(toolNames).toContain('createFeature');
@@ -145,6 +146,8 @@ describe('MCPServer', () => {
       expect(toolNames).toContain('pauseWork');
       expect(toolNames).toContain('resumeWork');
       expect(toolNames).toContain('setFeaturePriority');
+      expect(toolNames).toContain('reportTaskCompletion');
+      expect(toolNames).toContain('reportTaskProgress');
     });
   });
 
@@ -467,6 +470,197 @@ describe('MCPServer', () => {
       expect(update).toMatchObject({
         type: 'feature-completed',
         featureId: 'test-123',
+      });
+    });
+  });
+
+  describe('Task completion tools', () => {
+    let featureId: string;
+    let taskId: number;
+
+    beforeEach(async () => {
+      // Create a feature and task for testing
+      const feature = db.features.create({
+        description: 'Test feature for completion',
+        priority: 'normal',
+      });
+      featureId = feature.id;
+
+      const task = db.tasks.create({
+        featureId,
+        role: 'developer',
+        description: 'Implement test feature',
+      });
+      taskId = task.id;
+
+      // Mark task as in progress
+      db.tasks.update(taskId, { status: 'in_progress' });
+    });
+
+    it('should handle reportTaskCompletion with success', async () => {
+      const request: JSONRPCRequest = {
+        jsonrpc: '2.0',
+        method: 'reportTaskCompletion',
+        params: {
+          taskId,
+          status: 'complete',
+          output: {
+            filesCreated: ['src/feature.ts', 'src/feature.test.ts'],
+            filesModified: ['src/index.ts'],
+            testsAdded: ['src/feature.test.ts'],
+            summary: 'Implemented feature with tests',
+            details: 'Created feature module and comprehensive test suite',
+          },
+        },
+        id: 'test-task-1',
+      };
+
+      const response = await server.handleRequest(request);
+      
+      expect(response.error).toBeUndefined();
+      expect(response.result).toMatchObject({
+        success: true,
+        message: expect.stringContaining(`Task ${taskId} marked as complete`),
+        taskId,
+        featureId,
+      });
+
+      // Verify task was updated
+      const updatedTask = db.tasks.findById(taskId);
+      expect(updatedTask?.status).toBe('complete');
+      expect(updatedTask?.completedAt).toBeDefined();
+      expect(updatedTask?.output).toMatchObject({
+        filesCreated: ['src/feature.ts', 'src/feature.test.ts'],
+        summary: 'Implemented feature with tests',
+      });
+    });
+
+    it('should handle reportTaskCompletion with failure', async () => {
+      const request: JSONRPCRequest = {
+        jsonrpc: '2.0',
+        method: 'reportTaskCompletion',
+        params: {
+          taskId,
+          status: 'failed',
+          output: {
+            summary: 'Failed to implement due to dependency issues',
+            errors: ['Module not found: xyz', 'Type errors in existing code'],
+            blockReason: 'Need to fix existing type errors first',
+          },
+        },
+        id: 'test-task-2',
+      };
+
+      const response = await server.handleRequest(request);
+      
+      expect(response.error).toBeUndefined();
+      expect(response.result).toMatchObject({
+        success: true,
+        message: expect.stringContaining(`Task ${taskId} marked as failed`),
+      });
+
+      const updatedTask = db.tasks.findById(taskId);
+      expect(updatedTask?.status).toBe('failed');
+    });
+
+    it('should reject completion for non-existent task', async () => {
+      const request: JSONRPCRequest = {
+        jsonrpc: '2.0',
+        method: 'reportTaskCompletion',
+        params: {
+          taskId: 99999,
+          status: 'complete',
+          output: { summary: 'Test' },
+        },
+        id: 'test-task-3',
+      };
+
+      const response = await server.handleRequest(request);
+      
+      expect(response.error).toBeDefined();
+      expect(response.error?.code).toBe(ErrorCodes.TASK_NOT_FOUND);
+      expect(response.error?.message).toContain('Task not found');
+    });
+
+    it('should reject completion for task not in progress', async () => {
+      // Reset task to pending
+      db.tasks.update(taskId, { status: 'pending' });
+
+      const request: JSONRPCRequest = {
+        jsonrpc: '2.0',
+        method: 'reportTaskCompletion',
+        params: {
+          taskId,
+          status: 'complete',
+          output: { summary: 'Test' },
+        },
+        id: 'test-task-4',
+      };
+
+      const response = await server.handleRequest(request);
+      
+      expect(response.error).toBeDefined();
+      expect(response.error?.code).toBe(ErrorCodes.TASK_NOT_IN_PROGRESS);
+      expect(response.error?.message).toContain('not in progress');
+    });
+
+    it('should handle reportTaskProgress', async () => {
+      const request: JSONRPCRequest = {
+        jsonrpc: '2.0',
+        method: 'reportTaskProgress',
+        params: {
+          taskId,
+          progress: 'Setting up test environment',
+          currentStep: 'Installing dependencies',
+          percentComplete: 25,
+        },
+        id: 'test-progress-1',
+      };
+
+      const response = await server.handleRequest(request);
+      
+      expect(response.error).toBeUndefined();
+      expect(response.result).toMatchObject({
+        success: true,
+        message: 'Progress update recorded',
+        taskId,
+      });
+
+      // Verify audit log entry was created
+      const auditLogs = db.auditLog.findByEntity('task', taskId.toString());
+      expect(auditLogs.length).toBeGreaterThan(0);
+      expect(auditLogs[0].action).toBe('progress_update');
+      expect(auditLogs[0].details).toMatchObject({
+        progress: 'Setting up test environment',
+        percentComplete: 25,
+      });
+    });
+
+    it('should emit events on task completion', async () => {
+      // Listen for task completion event
+      const eventPromise = new Promise((resolve) => {
+        manager.once('task:completed', resolve);
+      });
+
+      const request: JSONRPCRequest = {
+        jsonrpc: '2.0',
+        method: 'reportTaskCompletion',
+        params: {
+          taskId,
+          status: 'complete',
+          output: { summary: 'Task completed' },
+        },
+        id: 'test-event-1',
+      };
+
+      await server.handleRequest(request);
+
+      const event = await eventPromise;
+      expect(event).toMatchObject({
+        taskId,
+        featureId,
+        status: 'complete',
+        output: { summary: 'Task completed' },
       });
     });
   });

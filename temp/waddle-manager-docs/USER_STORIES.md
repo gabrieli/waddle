@@ -8,7 +8,9 @@
 
 ### Phase 2 - Core Engine
 - [x] Story 3: MCP Server Implementation
-- [x] Story 4: Headless Claude Executor
+- [x] Story 4: Headless Claude Executor (Being Replaced)
+- [ ] Story 11: Interactive Claude Executor (Architecture Update)
+- [x] Story 12: Task Completion MCP Tools
 - [ ] Story 5: Autonomous Orchestrator Engine
 
 ### Phase 3 - User Interface
@@ -553,13 +555,165 @@ examples/
 
 ---
 
+---
+
+## Story 11: Interactive Claude Executor (Architecture Update)
+
+**Status**: ⬜ Not Started
+
+**As a** manager system  
+**I want** to spawn interactive Claude Code instances instead of headless mode  
+**So that** development tasks can be completed with full iterative capabilities
+
+### Acceptance Criteria
+- [ ] Update executor to spawn interactive Claude instances
+- [ ] Pass task context via initial prompt
+- [ ] Monitor Claude process output
+- [ ] Detect when Claude calls completion tool
+- [ ] Parse task output from completion tool call
+- [ ] Clean process termination after task completion
+- [ ] Handle timeouts for long-running tasks
+- [ ] Support for multiple concurrent Claude instances
+
+### Technical Details
+```typescript
+// src/executor/interactive-claude.ts
+class InteractiveClaudeExecutor {
+  async execute(request: ExecutionRequest): Promise<ExecutionResult> {
+    const prompt = this.buildInteractivePrompt(request);
+    const process = spawn('claude', ['code', prompt]);
+    
+    // Monitor output for completion tool call
+    const result = await this.waitForCompletion(process, request.timeout);
+    
+    // Terminate Claude instance
+    await this.cleanTermination(process);
+    
+    return result;
+  }
+  
+  private buildInteractivePrompt(request: ExecutionRequest): string {
+    return `You are working on task #${request.task.id} for feature "${request.feature.description}".
+    
+    Role: ${request.role}
+    Task: ${request.task.description}
+    
+    Context:
+    ${request.context.map(c => c.content).join('\n\n')}
+    
+    Instructions:
+    1. Complete the task using all available tools
+    2. When finished, call the 'reportTaskCompletion' MCP tool with your results
+    3. The completion report should include files created/modified and a summary
+    
+    Please begin working on this task.`;
+  }
+}
+```
+
+### Implementation Notes
+- Use spawn with shell:true for proper terminal handling
+- Parse ANSI escape codes from output
+- Implement robust process cleanup
+- Add process pooling for efficiency
+- Log all interactions for debugging
+
+---
+
+## Story 12: Task Completion MCP Tools
+
+**Status**: ✅ Completed
+
+**As a** Claude Code instance  
+**I want** MCP tools to report task completion  
+**So that** the manager knows when I'm done and can process results
+
+### Acceptance Criteria
+- [x] Add reportTaskCompletion tool to MCP server
+- [x] Tool accepts task ID, status, and structured output
+- [x] Validate task exists and is assigned to caller
+- [x] Store completion data in database
+- [x] Emit completion event for manager to handle
+- [x] Support partial progress updates
+- [x] Include error reporting in completion
+- [x] Return confirmation to Claude
+
+### Technical Details
+```typescript
+// src/mcp-server/tools.ts
+export const taskCompletionTools = {
+  reportTaskCompletion: {
+    description: "Report completion of an assigned task",
+    parameters: {
+      taskId: { type: 'number', required: true },
+      status: { type: 'string', enum: ['complete', 'failed', 'blocked'] },
+      output: {
+        type: 'object',
+        properties: {
+          filesCreated: { type: 'array', items: { type: 'string' } },
+          filesModified: { type: 'array', items: { type: 'string' } },
+          testsAdded: { type: 'array', items: { type: 'string' } },
+          summary: { type: 'string' },
+          details: { type: 'string' },
+          errors: { type: 'array', items: { type: 'string' } },
+          nextSteps: { type: 'array', items: { type: 'string' } }
+        }
+      }
+    },
+    handler: async (params, context) => {
+      // Validate task assignment
+      const task = await db.tasks.findById(params.taskId);
+      if (!task || task.status !== 'in_progress') {
+        throw new Error('Invalid task or not in progress');
+      }
+      
+      // Update task with results
+      await db.tasks.update(task.id, {
+        status: params.status,
+        completedAt: new Date(),
+        output: params.output
+      });
+      
+      // Emit event for manager
+      manager.emit('task:completed', {
+        taskId: task.id,
+        featureId: task.featureId,
+        status: params.status,
+        output: params.output
+      });
+      
+      return {
+        success: true,
+        message: 'Task completion recorded'
+      };
+    }
+  },
+  
+  reportTaskProgress: {
+    description: "Report progress on current task",
+    parameters: {
+      taskId: { type: 'number', required: true },
+      progress: { type: 'string' },
+      currentStep: { type: 'string' }
+    }
+  }
+};
+```
+
+### Implementation Notes
+- Add authentication/session tracking for Claude instances
+- Implement rate limiting to prevent spam
+- Store progress updates in audit log
+- Add WebSocket notifications for real-time updates
+- Consider adding file snapshot capabilities
+
 ## Completion Tracking
 
 ### Summary
-- **Total Stories**: 10
-- **Completed**: 4
+- **Total Stories**: 12
+- **Completed**: 5
 - **In Progress**: 0
-- **Not Started**: 6
+- **Not Started**: 7
 
 ### Next Steps
 1. ~~Start with Story 1 (Core Infrastructure)~~ ✅
@@ -568,7 +722,8 @@ examples/
 4. Update this document as work progresses
 5. ~~Story 3 (MCP Server Implementation)~~ ✅
 6. ~~Story 4 (Headless Claude Executor)~~ ✅
-7. **Next**: Story 5 (Autonomous Orchestrator Engine)
+7. ~~Story 12 (Task Completion MCP Tools)~~ ✅
+8. **Next**: Story 11 (Interactive Claude Executor) - This should be done before Story 5 as it changes the fundamental execution model
 
 ### Notes for Resuming Work
 - Check this document for current progress

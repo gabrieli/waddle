@@ -151,6 +151,17 @@ export class MCPServer {
           );
         }
 
+        // Handle custom errors with error codes
+        if (error && typeof error === 'object' && 'code' in error && 'message' in error) {
+          const customError = error as { code: number; message: string; data?: any };
+          return this.createErrorResponse(
+            id,
+            customError.code,
+            customError.message,
+            customError.data
+          );
+        }
+        
         // Handle other errors
         const message = error instanceof Error ? error.message : 'Unknown error';
         return this.createErrorResponse(

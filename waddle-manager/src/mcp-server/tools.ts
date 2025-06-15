@@ -9,6 +9,9 @@ import {
   type MCPTool,
   type FeatureCreatedResponse,
   type ProgressResponse,
+  type TaskCompletionResponse,
+  type TaskProgressResponse,
+  ErrorCodes,
 } from './types';
 import { z } from 'zod';
 
@@ -47,6 +50,28 @@ const ResumeWorkSchema = z.object({
 const SetFeaturePrioritySchema = z.object({
   featureId: z.string().uuid(),
   priority: z.enum(['low', 'normal', 'high', 'critical']),
+});
+
+const ReportTaskCompletionSchema = z.object({
+  taskId: z.number().int().positive(),
+  status: z.enum(['complete', 'failed']),
+  output: z.object({
+    filesCreated: z.array(z.string()).optional(),
+    filesModified: z.array(z.string()).optional(),
+    testsAdded: z.array(z.string()).optional(),
+    summary: z.string().min(1),
+    details: z.string().optional(),
+    errors: z.array(z.string()).optional(),
+    nextSteps: z.array(z.string()).optional(),
+    blockReason: z.string().optional(), // If task is blocked, explain why
+  }),
+});
+
+const ReportTaskProgressSchema = z.object({
+  taskId: z.number().int().positive(),
+  progress: z.string().min(1),
+  currentStep: z.string().optional(),
+  percentComplete: z.number().min(0).max(100).optional(),
 });
 
 export function createTools(db: Database, manager: WaddleManager): Record<string, MCPTool> {
@@ -276,6 +301,180 @@ export function createTools(db: Database, manager: WaddleManager): Record<string
           oldPriority: feature.priority,
           newPriority: updated.priority,
           message: `Feature priority updated from ${feature.priority} to ${updated.priority}`,
+        };
+      },
+    },
+
+    reportTaskCompletion: {
+      name: 'reportTaskCompletion',
+      description: 'Report completion of an assigned task (called by Claude instances)',
+      parameters: {
+        taskId: {
+          type: 'number',
+          description: 'ID of the task being completed',
+          required: true,
+        },
+        status: {
+          type: 'string',
+          description: 'Completion status',
+          enum: ['complete', 'failed'],
+          required: true,
+        },
+        output: {
+          type: 'object',
+          description: 'Task completion details',
+          required: true,
+        },
+      },
+      handler: async (params: unknown): Promise<TaskCompletionResponse> => {
+        const validated = ReportTaskCompletionSchema.parse(params);
+        
+        // Find and validate task
+        const task = db.tasks.findById(validated.taskId);
+        if (!task) {
+          throw {
+            code: ErrorCodes.TASK_NOT_FOUND,
+            message: `Task not found: ${validated.taskId}`,
+          };
+        }
+        
+        if (task.status !== 'in_progress') {
+          throw {
+            code: ErrorCodes.TASK_NOT_IN_PROGRESS,
+            message: `Task ${validated.taskId} is not in progress (current status: ${task.status})`,
+          };
+        }
+        
+        // Update task with completion data
+        db.tasks.update(task.id, {
+          status: validated.status as any,
+          completedAt: new Date(),
+          output: validated.output,
+        });
+        
+        // Store context for future tasks
+        if (validated.status === 'complete' && validated.output.details) {
+          // Map role to appropriate context type
+          const contextTypeMap = {
+            architect: 'architecture',
+            developer: 'implementation',
+            reviewer: 'review',
+          } as const;
+          
+          db.context.create({
+            featureId: task.featureId,
+            type: contextTypeMap[task.role],
+            content: JSON.stringify(validated.output),
+            author: `${task.role}-claude`,
+          });
+        }
+        
+        // Update feature status if needed
+        const allTasks = db.tasks.findByFeatureId(task.featureId);
+        const incompleteTasks = allTasks.filter(t => t.status !== 'complete' && t.status !== 'failed');
+        
+        if (incompleteTasks.length === 0) {
+          // All tasks done, mark feature as complete
+          db.features.update(task.featureId, {
+            status: 'complete',
+          });
+        } else if (validated.status === 'failed') {
+          // Task failed, might need to update feature status
+          const failedCritical = allTasks.some(t => 
+            t.role === 'architect' && t.status === 'failed'
+          );
+          if (failedCritical) {
+            db.features.update(task.featureId, {
+              status: 'failed',
+            });
+          }
+        }
+        
+        // Emit event for orchestrator
+        manager.emit('task:completed', {
+          taskId: task.id,
+          featureId: task.featureId,
+          status: validated.status,
+          output: validated.output,
+        });
+        
+        return {
+          success: true,
+          message: `Task ${task.id} marked as ${validated.status}`,
+          taskId: task.id,
+          featureId: task.featureId,
+        };
+      },
+    },
+
+    reportTaskProgress: {
+      name: 'reportTaskProgress',
+      description: 'Report progress on current task (called by Claude instances)',
+      parameters: {
+        taskId: {
+          type: 'number',
+          description: 'ID of the task',
+          required: true,
+        },
+        progress: {
+          type: 'string',
+          description: 'Progress update message',
+          required: true,
+        },
+        currentStep: {
+          type: 'string',
+          description: 'Current step being executed',
+        },
+        percentComplete: {
+          type: 'number',
+          description: 'Percentage complete (0-100)',
+        },
+      },
+      handler: async (params: unknown): Promise<TaskProgressResponse> => {
+        const validated = ReportTaskProgressSchema.parse(params);
+        
+        // Find and validate task
+        const task = db.tasks.findById(validated.taskId);
+        if (!task) {
+          throw {
+            code: ErrorCodes.TASK_NOT_FOUND,
+            message: `Task not found: ${validated.taskId}`,
+          };
+        }
+        
+        if (task.status !== 'in_progress') {
+          throw {
+            code: ErrorCodes.TASK_NOT_IN_PROGRESS,
+            message: `Task ${validated.taskId} is not in progress`,
+          };
+        }
+        
+        // Store progress in audit log
+        db.auditLog.create({
+          entityType: 'task',
+          entityId: task.id.toString(),
+          action: 'progress_update',
+          actor: 'claude-instance',
+          details: {
+            progress: validated.progress,
+            currentStep: validated.currentStep,
+            percentComplete: validated.percentComplete,
+          },
+        });
+        
+        // Emit event for real-time updates
+        manager.emit('task:progress', {
+          taskId: task.id,
+          featureId: task.featureId,
+          progress: validated.progress,
+          currentStep: validated.currentStep,
+          percentComplete: validated.percentComplete,
+        });
+        
+        return {
+          success: true,
+          message: 'Progress update recorded',
+          taskId: task.id,
         };
       },
     },

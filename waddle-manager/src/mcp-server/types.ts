@@ -35,6 +35,9 @@ export const ErrorCodes = {
   INVALID_STATUS: -32002,
   DATABASE_ERROR: -32003,
   VALIDATION_ERROR: -32004,
+  TASK_NOT_FOUND: -32005,
+  TASK_NOT_IN_PROGRESS: -32006,
+  UNAUTHORIZED_TASK_ACCESS: -32007,
 } as const;
 
 // MCP Tool definitions
@@ -84,6 +87,28 @@ export interface SetFeaturePriorityParams {
   priority: 'low' | 'normal' | 'high' | 'critical';
 }
 
+export interface ReportTaskCompletionParams {
+  taskId: number;
+  status: 'complete' | 'failed';
+  output: {
+    filesCreated?: string[];
+    filesModified?: string[];
+    testsAdded?: string[];
+    summary: string;
+    details?: string;
+    errors?: string[];
+    nextSteps?: string[];
+    blockReason?: string;
+  };
+}
+
+export interface ReportTaskProgressParams {
+  taskId: number;
+  progress: string;
+  currentStep?: string;
+  percentComplete?: number;
+}
+
 // Response types
 export interface FeatureCreatedResponse {
   id: string;
@@ -118,4 +143,17 @@ export interface SystemStatusResponse {
   queuedTasks: number;
   completedToday: number;
   uptime: number;
+}
+
+export interface TaskCompletionResponse {
+  success: boolean;
+  message: string;
+  taskId: number;
+  featureId: string;
+}
+
+export interface TaskProgressResponse {
+  success: boolean;
+  message: string;
+  taskId: number;
 }

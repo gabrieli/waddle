@@ -10,7 +10,8 @@ import {
   FeatureRepository, 
   TaskRepository, 
   TransitionRepository, 
-  ContextRepository 
+  ContextRepository,
+  AuditLogRepository 
 } from './repositories';
 
 export class Database {
@@ -22,6 +23,7 @@ export class Database {
   private _tasks?: TaskRepository;
   private _transitions?: TransitionRepository;
   private _context?: ContextRepository;
+  private _auditLog?: AuditLogRepository;
 
   constructor(dbPath = './waddle.db') {
     this.dbPath = dbPath;
@@ -99,5 +101,12 @@ export class Database {
       this._context = new ContextRepository(this.getConnection());
     }
     return this._context;
+  }
+
+  get auditLog(): AuditLogRepository {
+    if (!this._auditLog) {
+      this._auditLog = new AuditLogRepository(this.getConnection());
+    }
+    return this._auditLog;
   }
 }
