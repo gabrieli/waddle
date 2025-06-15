@@ -7,8 +7,8 @@
 - [x] Story 2: SQLite Database Layer
 
 ### Phase 2 - Core Engine
-- [ ] Story 3: MCP Server Implementation
-- [ ] Story 4: Headless Claude Executor
+- [x] Story 3: MCP Server Implementation
+- [x] Story 4: Headless Claude Executor
 - [ ] Story 5: Autonomous Orchestrator Engine
 
 ### Phase 3 - User Interface
@@ -138,20 +138,20 @@ class FeatureRepository {
 
 ## Story 3: MCP Server Implementation
 
-**Status**: ⬜ Not Started
+**Status**: ✅ Completed
 
 **As a** Claude Code user  
 **I want** MCP tools to interact with Waddle  
 **So that** I can create features and monitor progress
 
 ### Acceptance Criteria
-- [ ] MCP server running on configurable port (default 3000)
-- [ ] Tools implemented: createFeature, getProgress, queryFeatures
-- [ ] Additional tools: pauseWork, resumeWork, setFeaturePriority
-- [ ] JSON-RPC 2.0 protocol compliance
-- [ ] Error handling with proper error codes
-- [ ] Request validation with clear error messages
-- [ ] Integration tests with mock Claude Code client
+- [x] MCP server running on configurable port (default 3000)
+- [x] Tools implemented: createFeature, getProgress, queryFeatures
+- [x] Additional tools: pauseWork, resumeWork, setFeaturePriority
+- [x] JSON-RPC 2.0 protocol compliance
+- [x] Error handling with proper error codes
+- [x] Request validation with clear error messages
+- [x] Integration tests with mock Claude Code client
 
 ### Technical Details
 ```typescript
@@ -191,21 +191,21 @@ class MCPServer {
 
 ## Story 4: Headless Claude Executor
 
-**Status**: ⬜ Not Started
+**Status**: ✅ Completed
 
 **As a** manager system  
 **I want** to spawn headless Claude instances with specific contexts  
 **So that** tasks are completed autonomously
 
 ### Acceptance Criteria
-- [ ] Spawn Claude with -p flag and appropriate tools
-- [ ] Role-based prompt templates (architect, developer, reviewer)
-- [ ] Context injection from database
-- [ ] Output parsing for both text and JSON formats
-- [ ] Error handling for process failures
-- [ ] Retry logic with exponential backoff
-- [ ] Process timeout management
-- [ ] Resource cleanup on failure
+- [x] Spawn Claude with -p flag and appropriate tools
+- [x] Role-based prompt templates (architect, developer, reviewer)
+- [x] Context injection from database
+- [x] Output parsing for both text and JSON formats
+- [x] Error handling for process failures
+- [x] Retry logic with exponential backoff
+- [x] Process timeout management
+- [x] Resource cleanup on failure
 
 ### Technical Details
 ```typescript
@@ -557,16 +557,18 @@ examples/
 
 ### Summary
 - **Total Stories**: 10
-- **Completed**: 2
+- **Completed**: 4
 - **In Progress**: 0
-- **Not Started**: 8
+- **Not Started**: 6
 
 ### Next Steps
 1. ~~Start with Story 1 (Core Infrastructure)~~ ✅
 2. ~~Complete Phase 1 before moving to Phase 2~~ ✅ Phase 1 Complete!
 3. Each story should be fully tested before marking complete
 4. Update this document as work progresses
-5. **Next**: Story 3 (MCP Server Implementation)
+5. ~~Story 3 (MCP Server Implementation)~~ ✅
+6. ~~Story 4 (Headless Claude Executor)~~ ✅
+7. **Next**: Story 5 (Autonomous Orchestrator Engine)
 
 ### Notes for Resuming Work
 - Check this document for current progress
