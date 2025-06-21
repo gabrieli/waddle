@@ -1,0 +1,12 @@
+{
+  "pollingInterval": 30000,
+  "claudeExecutable": "claude",
+  "workingDirectory": "./workspace",
+  "database": "./orchestrator.db",
+  "agents": {
+    "manager": { "model": "claude-3-opus" },
+    "architect": { "model": "claude-3-opus" },
+    "developer": { "model": "claude-3-opus" },
+    "reviewer": { "model": "claude-3-opus" }
+  }
+}
