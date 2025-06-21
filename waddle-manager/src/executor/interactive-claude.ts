@@ -12,6 +12,7 @@ export interface InteractiveClaudeConfig {
   timeout?: number;
   maxRetries?: number;
   retryDelay?: number;
+  mcpServerUrl?: string;
 }
 
 export class InteractiveClaudeExecutor extends EventEmitter {
@@ -26,6 +27,7 @@ export class InteractiveClaudeExecutor extends EventEmitter {
       timeout: config.timeout ?? 600000, // 10 minutes default for dev tasks
       maxRetries: config.maxRetries ?? 1, // Less retries for interactive mode
       retryDelay: config.retryDelay ?? 2000,
+      mcpServerUrl: config.mcpServerUrl ?? 'http://localhost:5173',
     };
   }
 
@@ -92,7 +94,7 @@ export class InteractiveClaudeExecutor extends EventEmitter {
         env: {
           ...process.env,
           // Ensure MCP server is available
-          MCP_SERVER_URL: process.env.MCP_SERVER_URL || 'http://localhost:3000',
+          MCP_SERVER_URL: this.config.mcpServerUrl || 'http://localhost:5173',
         },
       });
 
@@ -212,7 +214,7 @@ IMPORTANT INSTRUCTIONS:
    - errors: Any errors encountered
    - nextSteps: Suggestions for next tasks
 
-The MCP server is available at: ${process.env.MCP_SERVER_URL || 'http://localhost:3000'}
+The MCP server is available at: ${this.config.mcpServerUrl || 'http://localhost:5173'}
 
 Please begin working on this task now.`;
   }

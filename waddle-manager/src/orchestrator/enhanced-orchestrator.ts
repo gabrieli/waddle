@@ -75,11 +75,13 @@ export class EnhancedOrchestrator extends EventEmitter {
     
     // Initialize executors
     this.headlessExecutor = new HeadlessClaudeExecutor({
-      claudePath: config.claudePath
+      claudePath: config.claudePath,
+      mcpServerUrl: config.mcpServerUrl
     });
     
     this.interactiveExecutor = new InteractiveClaudeExecutor({
-      claudePath: config.claudePath
+      claudePath: config.claudePath,
+      mcpServerUrl: config.mcpServerUrl
     });
     
     // Configure

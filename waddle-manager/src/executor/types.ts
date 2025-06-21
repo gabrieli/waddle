@@ -11,6 +11,7 @@ export interface ClaudeExecutorConfig {
   maxRetries?: number;  // Max retry attempts
   retryDelay?: number;  // Initial retry delay in ms
   timeout?: number;  // Execution timeout in ms
+  mcpServerUrl?: string;  // MCP server URL for tool access
 }
 
 export interface ExecutorOptions {

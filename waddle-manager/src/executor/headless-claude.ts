@@ -32,6 +32,7 @@ export class HeadlessClaudeExecutor extends EventEmitter {
       maxRetries: config.maxRetries ?? 3,
       retryDelay: config.retryDelay ?? 1000,
       timeout: config.timeout ?? 300000, // 5 minutes default
+      mcpServerUrl: config.mcpServerUrl ?? 'http://localhost:5173',
     };
   }
 
@@ -167,6 +168,7 @@ export class HeadlessClaudeExecutor extends EventEmitter {
         const child = spawn(this.config.claudePath, args, {
           env: {
             ...process.env,
+            MCP_SERVER_URL: this.config.mcpServerUrl || 'http://localhost:5173',
             ...options.env,
           },
         });
