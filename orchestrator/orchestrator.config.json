@@ -4,13 +4,13 @@
   "workingDirectory": "/Users/gabrielionescu/projects/waddle",
   "database": "./orchestrator.db",
   "parallelMode": true,
-  "maxConcurrentManagers": 2,
+  "maxConcurrentManagers": 1,
   "maxConcurrentDevelopers": 1,
   "maxBufferMB": 200,
   "agents": {
     "manager": { "model": "sonnet" },
-    "architect": { "model": "opus" },
-    "developer": { "model": "opus" },
+    "architect": { "model": "sonnet" },
+    "developer": { "model": "sonnet" },
     "code_quality_reviewer": { "model": "sonnet" }
   },
   "logging": {
