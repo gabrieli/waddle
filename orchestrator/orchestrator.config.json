@@ -6,9 +6,9 @@
   "parallelMode": true,
   "maxConcurrentManagers": 1,
   "agents": {
-    "manager": { "model": "claude-sonnet-4-0" },
-    "architect": { "model": "claude-opus-4-0" },
-    "developer": { "model": "claude-opus-4-0" },
-    "code_quality_reviewer": { "model": "claude-sonnet-4-0" }
+    "manager": { "model": "sonnet" },
+    "architect": { "model": "opus" },
+    "developer": { "model": "opus" },
+    "code_quality_reviewer": { "model": "sonnet" }
   }
 }
