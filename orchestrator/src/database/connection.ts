@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3';
 import { SCHEMA } from './schema.js';
+import { runMigrations } from './migrations.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -34,6 +35,9 @@ export function initializeDatabase(dbPath?: string): void {
     for (const index of SCHEMA.indices) {
       database.exec(index);
     }
+    
+    // Run migrations
+    runMigrations(database);
     
     console.log('Database initialized successfully');
   } catch (error) {

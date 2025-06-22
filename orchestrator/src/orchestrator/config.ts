@@ -9,11 +9,14 @@ export interface OrchestratorConfig {
   claudeExecutable: string;
   workingDirectory: string;
   database: string;
+  parallelMode?: boolean;
+  maxConcurrentManagers?: number;
   agents: {
     manager: { model: string };
     architect: { model: string };
     developer: { model: string };
-    reviewer: { model: string };
+    code_quality_reviewer?: { model: string };
+    reviewer?: { model: string }; // For backwards compatibility
   };
 }
 

@@ -11,6 +11,8 @@ export interface WorkItem {
   description: string | null;
   status: WorkItemStatus;
   assigned_role: AgentRole | null;
+  processing_started_at: string | null;
+  processing_agent_id: string | null;
   created_at: string;
   updated_at: string;
 }

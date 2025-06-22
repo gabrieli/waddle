@@ -69,7 +69,13 @@ function displayWorkItemLine(item: WorkItem, indent: number): void {
   const statusIcon = STATUS_ICONS[item.status];
   const role = item.assigned_role ? `[${item.assigned_role}]` : '';
   
-  console.log(`${prefix}${typeIcon} ${statusIcon} ${item.id} - ${item.title} ${role}`);
+  // Show if item is being processed
+  let processingInfo = '';
+  if (item.processing_agent_id) {
+    processingInfo = ` 🔒 [Processing by ${item.processing_agent_id}]`;
+  }
+  
+  console.log(`${prefix}${typeIcon} ${statusIcon} ${item.id} - ${item.title} ${role}${processingInfo}`);
   
   if (item.description && indent === 0) {
     const descLines = item.description.split('\n');

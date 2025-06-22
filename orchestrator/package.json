@@ -12,7 +12,10 @@
     "view-work": "tsx scripts/view-work-items.ts",
     "add-test-data": "tsx scripts/add-test-data.ts",
     "build": "tsc",
-    "dev": "tsx watch src/orchestrator/index.ts"
+    "dev": "tsx watch src/orchestrator/index.ts",
+    "start:debug": "DEBUG=true tsx src/orchestrator/index.ts",
+    "start:parallel": "PARALLEL_MODE=true tsx src/orchestrator/index.ts",
+    "start:single": "PARALLEL_MODE=false tsx src/orchestrator/index.ts"
   },
   "keywords": ["orchestrator", "autonomous", "development"],
   "author": "",

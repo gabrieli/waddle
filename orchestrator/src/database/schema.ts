@@ -7,7 +7,9 @@ export const SCHEMA = {
       title TEXT NOT NULL,
       description TEXT,
       status TEXT NOT NULL CHECK(status IN ('backlog', 'ready', 'in_progress', 'review', 'done')),
-      assigned_role TEXT CHECK(assigned_role IN ('manager', 'architect', 'developer', 'reviewer')),
+      assigned_role TEXT CHECK(assigned_role IN ('manager', 'architect', 'developer', 'code_quality_reviewer')),
+      processing_started_at TIMESTAMP,
+      processing_agent_id TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (parent_id) REFERENCES work_items(id)

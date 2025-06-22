@@ -1,12 +1,14 @@
 {
   "pollingInterval": 30000,
-  "claudeExecutable": "claude",
-  "workingDirectory": "./workspace",
+  "claudeExecutable": "/Users/gabrielionescu/.claude/local/claude",
+  "workingDirectory": ".",
   "database": "./orchestrator.db",
+  "parallelMode": true,
+  "maxConcurrentManagers": 1,
   "agents": {
-    "manager": { "model": "claude-3-opus" },
-    "architect": { "model": "claude-3-opus" },
-    "developer": { "model": "claude-3-opus" },
-    "reviewer": { "model": "claude-3-opus" }
+    "manager": { "model": "claude-sonnet-4-0" },
+    "architect": { "model": "claude-opus-4-0" },
+    "developer": { "model": "claude-opus-4-0" },
+    "code_quality_reviewer": { "model": "claude-sonnet-4-0" }
   }
 }

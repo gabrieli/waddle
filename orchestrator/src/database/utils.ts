@@ -116,3 +116,123 @@ export function generateId(prefix: string): string {
   const random = Math.random().toString(36).substring(2, 5);
   return `${prefix}-${timestamp}-${random}`.toUpperCase();
 }
+
+// Work item locking functions
+
+export function claimWorkItem(workItemId: string, agentId: string): boolean {
+  const db = getDatabase();
+  
+  try {
+    // Atomically claim the work item if it's not already being processed
+    const result = db.prepare(`
+      UPDATE work_items
+      SET processing_started_at = CURRENT_TIMESTAMP,
+          processing_agent_id = ?,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+        AND (processing_agent_id IS NULL 
+             OR processing_started_at < datetime('now', '-30 minutes'))
+    `).run(agentId, workItemId);
+    
+    if (result.changes > 0) {
+      addHistory(workItemId, 'agent_output', `Work claimed by agent ${agentId}`, agentId);
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error('Failed to claim work item:', error);
+    return false;
+  }
+}
+
+export function releaseWorkItem(workItemId: string, agentId: string): boolean {
+  const db = getDatabase();
+  
+  try {
+    // Only release if this agent owns the lock
+    const result = db.prepare(`
+      UPDATE work_items
+      SET processing_started_at = NULL,
+          processing_agent_id = NULL,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+        AND processing_agent_id = ?
+    `).run(workItemId, agentId);
+    
+    if (result.changes > 0) {
+      addHistory(workItemId, 'agent_output', `Work released by agent ${agentId}`, agentId);
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error('Failed to release work item:', error);
+    return false;
+  }
+}
+
+export function getAvailableWorkItems(): WorkItem[] {
+  const db = getDatabase();
+  
+  // Get work items that are either not being processed or have stale locks
+  const stmt = db.prepare(`
+    SELECT * FROM work_items
+    WHERE status NOT IN ('done')
+      AND (processing_agent_id IS NULL 
+           OR processing_started_at < datetime('now', '-30 minutes'))
+    ORDER BY 
+      CASE status 
+        WHEN 'review' THEN 1
+        WHEN 'in_progress' THEN 2
+        WHEN 'ready' THEN 3
+        ELSE 4
+      END,
+      created_at ASC
+  `);
+  
+  return stmt.all() as WorkItem[];
+}
+
+export function checkAndReleaseStaleWork(): number {
+  const db = getDatabase();
+  
+  try {
+    // Release work items that have been locked for more than 30 minutes
+    const result = db.prepare(`
+      UPDATE work_items
+      SET processing_started_at = NULL,
+          processing_agent_id = NULL,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE processing_agent_id IS NOT NULL
+        AND processing_started_at < datetime('now', '-30 minutes')
+    `).run();
+    
+    if (result.changes > 0) {
+      console.log(`Released ${result.changes} stale work locks`);
+    }
+    
+    return result.changes;
+  } catch (error) {
+    console.error('Failed to release stale work:', error);
+    return 0;
+  }
+}
+
+export function updateProcessingTimestamp(workItemId: string, agentId: string): boolean {
+  const db = getDatabase();
+  
+  try {
+    // Update the processing timestamp to keep the lock alive
+    const result = db.prepare(`
+      UPDATE work_items
+      SET processing_started_at = CURRENT_TIMESTAMP,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+        AND processing_agent_id = ?
+    `).run(workItemId, agentId);
+    
+    return result.changes > 0;
+  } catch (error) {
+    console.error('Failed to update processing timestamp:', error);
+    return false;
+  }
+}

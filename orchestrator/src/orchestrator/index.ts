@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 import { loadConfig, OrchestratorConfig } from './config.js';
 import { initializeDatabase, getDatabase, closeDatabase } from '../database/connection.js';
-import { getAllWorkItems, getWorkItemsByStatus } from '../database/utils.js';
+import { getAllWorkItems, getWorkItemsByStatus, checkAndReleaseStaleWork, getAvailableWorkItems } from '../database/utils.js';
 import { displayWorkItems } from './display.js';
+import { runManagerAgent } from '../agents/manager.js';
+import { runSingleManagerAgent } from '../agents/manager-single.js';
 import { WorkItem } from '../types/index.js';
 
 let isShuttingDown = false;
@@ -12,14 +14,45 @@ async function orchestratorLoop(config: OrchestratorConfig): Promise<void> {
   if (isShuttingDown) return;
   
   try {
-    // Step 1: Get current state
+    // Step 1: Clean up any stale locks
+    const staleLocks = checkAndReleaseStaleWork();
+    
+    // Step 2: Get current state
     const workItems = getAllWorkItems();
     
-    // Step 2: Display current state
+    // Step 3: Display current state
     displayWorkItems(workItems);
     
-    // For now, we're just displaying - no manager agent yet
-    // This will be added in a future story
+    // Step 4: Get available work items (not locked, not done)
+    const availableItems = getAvailableWorkItems();
+    
+    if (availableItems.length > 0) {
+      console.log(`\n🔄 Processing ${availableItems.length} available work items...`);
+      
+      // Determine if we should use parallel or single manager
+      const useParallel = process.env.PARALLEL_MODE === 'true' || config.parallelMode;
+      
+      if (useParallel) {
+        // Step 5: Run manager agents in parallel (max 3 concurrent)
+        const maxConcurrent = config.maxConcurrentManagers || 3;
+        const itemsToProcess = availableItems.slice(0, maxConcurrent);
+        
+        console.log(`   Running ${itemsToProcess.length} manager agents in parallel...`);
+        
+        const managerPromises = itemsToProcess.map((item: WorkItem) => 
+          runSingleManagerAgent(item.id, config).catch(err => {
+            console.error(`Error processing ${item.id}:`, err);
+          })
+        );
+        
+        await Promise.all(managerPromises);
+      } else {
+        // Use original single manager for all items
+        await runManagerAgent(config);
+      }
+    } else {
+      console.log('\n✅ No available work items to process');
+    }
     
   } catch (error) {
     console.error('Error in orchestrator loop:', error);
