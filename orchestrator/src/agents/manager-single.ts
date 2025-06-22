@@ -20,13 +20,29 @@ WORK ITEM:
 RECENT HISTORY:
 {history}
 
+PROJECT VISION: Waddle is an autonomous development system where AI agents collaborate as a cohesive team. Core objectives:
+- Agent autonomy and distributed processing
+- Role-based specialization (Manager, Architect, Developer, Reviewer)
+- Scalable parallel work processing
+- Quality assurance through multi-stage reviews
+- Continuous improvement and learning
+
+EPIC QUALITY VALIDATION:
+Before assigning epics to architect, validate they meet these criteria:
+- Must contribute to Waddle's autonomous development capabilities
+- Must improve system functionality, scalability, or quality
+- Must have clear business value for the Waddle platform
+- REJECT if title contains "Test", "Demo", "Example", "Simulation" without clear product value
+- REJECT if focused purely on testing/debugging rather than product improvement
+- REJECT if not aligned with project vision and objectives
+
 RULES:
 - Bug in backlog → assign_bug_buster (to investigate and reproduce)
 - Bug in ready → assign_developer (already investigated)
 - Bug in review → assign_code_quality_reviewer
 - Story in ready → assign_developer  
 - Story in review → assign_code_quality_reviewer
-- Epic in backlog → assign_architect
+- Epic in backlog → VALIDATE FIRST, then assign_architect OR reject_epic
 - Epic with stories in ready/in_progress → move epic to in_progress and skip (focus on stories)
 - Epic where all stories are done → mark_complete
 - Work that's been reviewed and approved → mark_complete
@@ -38,7 +54,7 @@ Analyze this ONE item and decide the next action.
 
 Return ONLY valid JSON:
 {
-  "action": "assign_architect|assign_developer|assign_bug_buster|assign_code_quality_reviewer|mark_complete|move_to_in_progress|wait",
+  "action": "assign_architect|assign_developer|assign_bug_buster|assign_code_quality_reviewer|mark_complete|move_to_in_progress|reject_epic|wait",
   "reason": "brief reason for the decision"
 }`;
 
@@ -80,7 +96,7 @@ Description: ${workItem.description || 'No description'}`;
       .replace('{history}', recentHistory || 'No recent history');
     
     // Execute Claude
-    const result = await executeClaudeAgent('manager', prompt, config);
+    const result = await executeClaudeAgent('manager', prompt, config, config.maxBufferMB);
     
     if (!result.success) {
       console.error('❌ Manager agent failed:', result.error);
@@ -145,6 +161,13 @@ Description: ${workItem.description || 'No description'}`;
         console.log(`   🐛 Assigning to bug buster`);
         const { runBugBusterAgent } = await import('./bug-buster.js');
         await runBugBusterAgent(workItemId, config);
+        break;
+        
+      case 'reject_epic':
+        console.log(`   ❌ Rejecting epic: ${decision.reason}`);
+        updateWorkItemStatus(workItemId, 'done', 'manager');
+        addHistory(workItemId, 'decision', `Epic rejected: ${decision.reason}. Not aligned with Waddle vision.`, 'manager');
+        console.log(`   ✅ Epic marked as done (rejected)`);
         break;
         
       case 'mark_complete':

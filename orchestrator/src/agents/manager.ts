@@ -52,7 +52,7 @@ export async function runManagerAgent(config: OrchestratorConfig): Promise<void>
     
     // Build and execute prompt
     const prompt = buildManagerPrompt(workItems, recentHistory, errorsStr);
-    const result = await executeClaudeAgent('manager', prompt, config);
+    const result = await executeClaudeAgent('manager', prompt, config, config.maxBufferMB);
     
     if (!result.success) {
       console.error('❌ Manager agent failed:', result.error);
@@ -191,6 +191,13 @@ async function executeDecision(decision: any, config: OrchestratorConfig): Promi
         addHistory(workItemId, 'decision', 'Assigned to bug buster', 'manager');
         const { runBugBusterAgent } = await import('./bug-buster.js');
         await runBugBusterAgent(workItemId, config);
+        break;
+        
+      case 'reject_epic':
+        console.log(`   ❌ Rejecting epic: ${reason}`);
+        updateWorkItemStatus(workItemId, 'done', 'manager');
+        addHistory(workItemId, 'decision', `Epic rejected: ${reason}. Not aligned with Waddle vision.`, 'manager');
+        console.log(`   ✅ Epic marked as done (rejected)`);
         break;
         
       case 'wait':

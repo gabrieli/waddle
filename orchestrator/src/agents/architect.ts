@@ -4,6 +4,9 @@ import { executeClaudeAgent } from './claude-executor.js';
 import { buildArchitectPrompt } from './prompts.js';
 import { OrchestratorConfig } from '../orchestrator/config.js';
 import { parseAgentJsonResponse } from './json-parser.js';
+import { ResourceExhaustionSimulator } from './resource-exhaustion-simulator.js';
+import { BackoffStrategy } from './backoff-strategy.js';
+import logger from '../utils/logger.js';
 
 export interface ArchitectAnalysisResult {
   technicalApproach: string;
@@ -20,6 +23,22 @@ export interface ArchitectAnalysisResult {
 export async function runArchitectAgent(workItemId: string, config: OrchestratorConfig): Promise<void> {
   const agentId = `architect-${Date.now()}`;
   console.log(`\n🏗️  Architect Agent: Analyzing epic ${workItemId}...`);
+  
+  // Initialize resource exhaustion simulator if configured
+  let resourceSimulator: ResourceExhaustionSimulator | undefined;
+  if (config.resourceExhaustion) {
+    resourceSimulator = new ResourceExhaustionSimulator(config.resourceExhaustion);
+    console.log('🔬 Resource exhaustion simulation enabled');
+  }
+  
+  // Initialize backoff strategy
+  const backoffStrategy = new BackoffStrategy({
+    initialDelayMs: 2000,
+    maxDelayMs: 120000,
+    multiplier: 2,
+    maxRetries: 5,
+    jitterMs: 500
+  });
   
   try {
     // Try to claim the work item
@@ -44,7 +63,7 @@ export async function runArchitectAgent(workItemId: string, config: Orchestrator
     
     // Build and execute prompt
     const prompt = buildArchitectPrompt(epic);
-    const result = await executeClaudeAgent('architect', prompt, config);
+    const result = await executeClaudeAgent('architect', prompt, config, config.maxBufferMB);
     
     if (!result.success) {
       console.error('❌ Architect agent failed:', result.error);

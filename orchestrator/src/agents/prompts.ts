@@ -8,12 +8,28 @@ WORK ITEMS:
 RECENT ERRORS:
 {recentErrors}
 
+PROJECT VISION: Waddle is an autonomous development system where AI agents collaborate as a cohesive team. Core objectives:
+- Agent autonomy and distributed processing
+- Role-based specialization (Manager, Architect, Developer, Reviewer)
+- Scalable parallel work processing
+- Quality assurance through multi-stage reviews
+- Continuous improvement and learning
+
+EPIC QUALITY VALIDATION:
+Before assigning epics to architect, validate they meet these criteria:
+- Must contribute to Waddle's autonomous development capabilities
+- Must improve system functionality, scalability, or quality
+- Must have clear business value for the Waddle platform
+- REJECT if title contains "Test", "Demo", "Example", "Simulation" without clear product value
+- REJECT if focused purely on testing/debugging rather than product improvement
+- REJECT if not aligned with project vision and objectives
+
 RULES:
 - Bugs in backlog → assign_bug_buster (to investigate and reproduce)
 - Bugs in ready → assign_developer (already investigated)
 - Stories in ready → assign_developer
 - Stories in review → assign_code_quality_reviewer or mark_complete
-- Epics in backlog → assign_architect
+- Epics in backlog → VALIDATE FIRST, then assign_architect OR reject_epic
 - Epics with stories in ready/in_progress → move epic to in_progress and skip (focus on stories)
 - Epics where all stories are done → mark_complete
 - Completed work → mark_complete
@@ -31,7 +47,7 @@ Return ONLY valid JSON:
 {
   "decisions": [{
     "workItemId": "ID",
-    "action": "assign_architect|assign_developer|assign_bug_buster|assign_code_quality_reviewer|mark_complete|wait",
+    "action": "assign_architect|assign_developer|assign_bug_buster|assign_code_quality_reviewer|mark_complete|reject_epic|wait",
     "reason": "brief reason"
   }],
   "createNewItems": [{

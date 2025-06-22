@@ -81,36 +81,56 @@ export function getWorkItem(id: string): WorkItem | null {
 export function getAllWorkItems(): WorkItem[] {
   const db = getDatabase();
   
-  const stmt = db.prepare(`
+  const query = `
     SELECT * FROM work_items
     ORDER BY created_at DESC
-  `);
+  `;
   
-  return stmt.all() as WorkItem[];
+  return executeQuery(
+    'getAllWorkItems',
+    query,
+    [],
+    () => db.prepare(query).all() as WorkItem[],
+    {}
+  );
 }
 
 export function getWorkItemsByStatus(status: WorkItemStatus): WorkItem[] {
   const db = getDatabase();
   
-  const stmt = db.prepare(`
+  const query = `
     SELECT * FROM work_items
     WHERE status = ?
     ORDER BY created_at DESC
-  `);
+  `;
+  const params = [status];
   
-  return stmt.all(status) as WorkItem[];
+  return executeQuery(
+    'getWorkItemsByStatus',
+    query,
+    params,
+    () => db.prepare(query).all(...params) as WorkItem[],
+    { status }
+  );
 }
 
 export function getChildWorkItems(parentId: string): WorkItem[] {
   const db = getDatabase();
   
-  const stmt = db.prepare(`
+  const query = `
     SELECT * FROM work_items
     WHERE parent_id = ?
     ORDER BY created_at ASC
-  `);
+  `;
+  const params = [parentId];
   
-  return stmt.all(parentId) as WorkItem[];
+  return executeQuery(
+    'getChildWorkItems',
+    query,
+    params,
+    () => db.prepare(query).all(...params) as WorkItem[],
+    { parentId }
+  );
 }
 
 export function updateWorkItemStatus(id: string, status: WorkItemStatus, role?: string): void {
@@ -161,24 +181,38 @@ export function addHistory(
 ): void {
   const db = getDatabase();
   
-  const stmt = db.prepare(`
+  const query = `
     INSERT INTO work_history (work_item_id, action, content, created_by)
     VALUES (?, ?, ?, ?)
-  `);
+  `;
+  const params = [workItemId, action, content, createdBy];
   
-  stmt.run(workItemId, action, content, createdBy);
+  executeQuery(
+    'addHistory',
+    query,
+    params,
+    () => db.prepare(query).run(...params),
+    { workItemId, action, createdBy }
+  );
 }
 
 export function getWorkItemHistory(workItemId: string): WorkHistory[] {
   const db = getDatabase();
   
-  const stmt = db.prepare(`
+  const query = `
     SELECT * FROM work_history
     WHERE work_item_id = ?
     ORDER BY created_at DESC
-  `);
+  `;
+  const params = [workItemId];
   
-  return stmt.all(workItemId) as WorkHistory[];
+  return executeQuery(
+    'getWorkItemHistory',
+    query,
+    params,
+    () => db.prepare(query).all(...params) as WorkHistory[],
+    { workItemId }
+  );
 }
 
 export function generateId(prefix: string): string {
@@ -233,21 +267,32 @@ export function claimWorkItem(workItemId: string, agentId: string): boolean {
 export function releaseWorkItem(workItemId: string, agentId: string): boolean {
   const db = getDatabase();
   
+  const query = `
+    UPDATE work_items
+    SET processing_started_at = NULL,
+        processing_agent_id = NULL,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+      AND processing_agent_id = ?
+  `;
+  const params = [workItemId, agentId];
+  
   try {
-    // Only release if this agent owns the lock
-    const result = db.prepare(`
-      UPDATE work_items
-      SET processing_started_at = NULL,
-          processing_agent_id = NULL,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-        AND processing_agent_id = ?
-    `).run(workItemId, agentId);
+    const result = executeQuery(
+      'releaseWorkItem',
+      query,
+      params,
+      () => db.prepare(query).run(...params),
+      { workItemId, agentId }
+    );
     
     if (result.changes > 0) {
+      logger.info('Work item released', { workItemId, agentId });
       addHistory(workItemId, 'agent_output', `Work released by agent ${agentId}`, agentId);
       return true;
     }
+    
+    logger.debug('Failed to release work item - not owned by agent', { workItemId, agentId });
     return false;
   } catch (error) {
     logger.error('Failed to release work item', { 
@@ -264,7 +309,7 @@ export function getAvailableWorkItems(): WorkItem[] {
   
   // Get work items that are either not being processed or have stale locks
   // Priority: bugs > stories > epics (within each status level)
-  const stmt = db.prepare(`
+  const query = `
     SELECT * FROM work_items
     WHERE status NOT IN ('done')
       AND (processing_agent_id IS NULL 
@@ -283,9 +328,15 @@ export function getAvailableWorkItems(): WorkItem[] {
         WHEN 'epic' THEN 4
       END,
       created_at ASC
-  `);
+  `;
   
-  return stmt.all() as WorkItem[];
+  return executeQuery(
+    'getAvailableWorkItems',
+    query,
+    [],
+    () => db.prepare(query).all() as WorkItem[],
+    {}
+  );
 }
 
 export function checkAndReleaseStaleWork(): number {
@@ -329,15 +380,23 @@ export function checkAndReleaseStaleWork(): number {
 export function updateProcessingTimestamp(workItemId: string, agentId: string): boolean {
   const db = getDatabase();
   
+  const query = `
+    UPDATE work_items
+    SET processing_started_at = CURRENT_TIMESTAMP,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+      AND processing_agent_id = ?
+  `;
+  const params = [workItemId, agentId];
+  
   try {
-    // Update the processing timestamp to keep the lock alive
-    const result = db.prepare(`
-      UPDATE work_items
-      SET processing_started_at = CURRENT_TIMESTAMP,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-        AND processing_agent_id = ?
-    `).run(workItemId, agentId);
+    const result = executeQuery(
+      'updateProcessingTimestamp',
+      query,
+      params,
+      () => db.prepare(query).run(...params),
+      { workItemId, agentId }
+    );
     
     return result.changes > 0;
   } catch (error) {
@@ -388,14 +447,20 @@ export function updateEpicBasedOnStories(epicId: string, role: string = 'system'
 export function getRecentErrors(hoursBack: number = 24): Array<{workItemId: string; error: any; history: WorkHistory}> {
   const db = getDatabase();
   
-  const stmt = db.prepare(`
+  const query = `
     SELECT * FROM work_history
     WHERE action = 'error'
       AND created_at > datetime('now', '-${hoursBack} hours')
     ORDER BY created_at DESC
-  `);
+  `;
   
-  const errors = stmt.all() as WorkHistory[];
+  const errors = executeQuery(
+    'getRecentErrors',
+    query,
+    [],
+    () => db.prepare(query).all() as WorkHistory[],
+    { hoursBack }
+  );
   
   return errors.map(h => ({
     workItemId: h.work_item_id,
@@ -408,7 +473,7 @@ export function hasUnresolvedError(workItemId: string): boolean {
   const db = getDatabase();
   
   // Check if there's an error without a subsequent fix
-  const stmt = db.prepare(`
+  const query = `
     SELECT COUNT(*) as count
     FROM work_history h1
     WHERE h1.work_item_id = ?
@@ -420,9 +485,17 @@ export function hasUnresolvedError(workItemId: string): boolean {
           AND h2.created_at > h1.created_at
           AND h2.content LIKE '%error resolved%'
       )
-  `);
+  `;
+  const params = [workItemId];
   
-  const result = stmt.get(workItemId) as { count: number };
+  const result = executeQuery(
+    'hasUnresolvedError',
+    query,
+    params,
+    () => db.prepare(query).get(...params) as { count: number },
+    { workItemId }
+  );
+  
   return result.count > 0;
 }
 
@@ -432,14 +505,21 @@ export function getActiveDeveloperCount(): number {
   const db = getDatabase();
   
   // Count work items currently being processed by developers
-  const stmt = db.prepare(`
+  const query = `
     SELECT COUNT(DISTINCT processing_agent_id) as count
     FROM work_items
     WHERE processing_agent_id LIKE 'developer-%'
       AND processing_started_at > datetime('now', '-30 minutes')
-  `);
+  `;
   
-  const result = stmt.get() as { count: number };
+  const result = executeQuery(
+    'getActiveDeveloperCount',
+    query,
+    [],
+    () => db.prepare(query).get() as { count: number },
+    {}
+  );
+  
   return result.count;
 }
 
@@ -512,9 +592,16 @@ export function saveBugMetadata(
 export function getBugMetadata(workItemId: string): BugMetadata | null {
   const db = getDatabase();
   
-  const stmt = db.prepare(`
+  const query = `
     SELECT * FROM bug_metadata WHERE work_item_id = ?
-  `);
+  `;
+  const params = [workItemId];
   
-  return stmt.get(workItemId) as BugMetadata | null;
+  return executeQuery(
+    'getBugMetadata',
+    query,
+    params,
+    () => db.prepare(query).get(...params) as BugMetadata | null,
+    { workItemId }
+  );
 }

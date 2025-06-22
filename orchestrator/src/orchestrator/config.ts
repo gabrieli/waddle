@@ -13,6 +13,26 @@ export interface OrchestratorConfig {
   parallelMode?: boolean;
   maxConcurrentManagers?: number;
   maxConcurrentDevelopers?: number;
+  maxBufferMB?: number; // Maximum buffer size for Claude output in MB
+  timeoutSimulation?: { // Configuration for timeout simulation testing
+    enabled: boolean;
+    delayMs?: number; // Artificial delay to inject (ms)
+    operations?: string[]; // Which operations to delay (e.g., ['architect', 'manager'])
+  };
+  errorInjection?: {
+    enabled: boolean;
+    targetAgents: string[]; // Which agents to inject errors for
+    injectionRate: number; // Percentage of requests to inject errors (0-100)
+    errorTypes: {
+      syntaxError?: boolean; // Malformed JSON syntax
+      typeError?: boolean; // Wrong data types
+      missingFields?: boolean; // Required fields missing
+      unexpectedStructure?: boolean; // Completely wrong structure
+      truncatedJson?: boolean; // Incomplete JSON
+      invalidCharacters?: boolean; // Non-JSON characters
+    };
+    seed?: number; // For reproducible error injection
+  };
   agents: {
     manager: { model: string };
     architect: { model: string };
@@ -28,6 +48,28 @@ export interface OrchestratorConfig {
     includeTimestamp: boolean;
     includeStackTrace: boolean;
     maxFileSize: number;
+  };
+  resourceExhaustion?: {
+    memoryPressure?: {
+      enabled: boolean;
+      targetUsagePercent: number;
+      checkIntervalMs: number;
+    };
+    rateLimiting?: {
+      enabled: boolean;
+      requestsPerMinute: number;
+      burstSize: number;
+    };
+    responseDelays?: {
+      enabled: boolean;
+      minDelayMs: number;
+      maxDelayMs: number;
+    };
+    errorInjection?: {
+      enabled: boolean;
+      errorRate: number;
+      errorTypes: ('timeout' | 'parse' | 'api')[];
+    };
   };
 }
 

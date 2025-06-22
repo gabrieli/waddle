@@ -1,3 +1,9 @@
+import { OrchestratorConfig } from '../orchestrator/config.js';
+import { getErrorInjector, ErrorInjectionContext } from './error-injector.js';
+import { getLogger } from '../utils/logger.js';
+
+const logger = getLogger();
+
 export interface JsonParseResult<T> {
   success: boolean;
   data?: T;
@@ -5,7 +11,12 @@ export interface JsonParseResult<T> {
   rawOutput: string;
 }
 
-export function parseAgentJsonResponse<T>(output: string, agentType: string): JsonParseResult<T> {
+export function parseAgentJsonResponse<T>(
+  output: string, 
+  agentType: string,
+  config?: OrchestratorConfig,
+  context?: ErrorInjectionContext
+): JsonParseResult<T> {
   console.log(`📝 Raw ${agentType} output length:`, output.length);
   if (process.env.DEBUG === 'true' || output.length < 500) {
     console.log(`📝 Raw ${agentType} output:`, output);
@@ -87,6 +98,21 @@ export function parseAgentJsonResponse<T>(output: string, agentType: string): Js
   jsonStr = jsonStr.trim()
     .replace(/^\uFEFF/, '') // Remove BOM
     .replace(/[\u200B-\u200D\uFEFF]/g, ''); // Remove zero-width characters
+  
+  // Check if error injection is enabled for this agent
+  if (config && config.errorInjection?.enabled) {
+    const errorInjector = getErrorInjector(config);
+    if (errorInjector.shouldInjectError(config, agentType)) {
+      // Inject error into the JSON string
+      jsonStr = errorInjector.injectError(
+        jsonStr, 
+        config, 
+        context || { agentType }
+      );
+      
+      logger.warn(`🔴 Error injection applied to ${agentType} JSON response`);
+    }
+  }
   
   try {
     console.log(`   🔍 Attempting to parse JSON for ${agentType}...`);

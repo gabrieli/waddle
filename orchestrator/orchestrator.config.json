@@ -6,6 +6,7 @@
   "parallelMode": true,
   "maxConcurrentManagers": 2,
   "maxConcurrentDevelopers": 1,
+  "maxBufferMB": 200,
   "agents": {
     "manager": { "model": "sonnet" },
     "architect": { "model": "opus" },

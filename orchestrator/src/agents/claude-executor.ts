@@ -18,7 +18,8 @@ export interface AgentExecutionResult {
 export async function executeClaudeAgent(
   role: string,
   prompt: string,
-  config: OrchestratorConfig
+  config: OrchestratorConfig,
+  maxBufferMB: number = 100 // Default to 100MB instead of 10MB
 ): Promise<AgentExecutionResult> {
   return new Promise((resolve) => {
     const startTime = Date.now();
@@ -33,6 +34,17 @@ export async function executeClaudeAgent(
       console.log(`   📝 Prompt preview: ${prompt.substring(0, 200)}...`);
     }
     
+    // Check if timeout simulation is enabled
+    if (config.timeoutSimulation?.enabled) {
+      const shouldInjectDelay = !config.timeoutSimulation.operations || 
+        config.timeoutSimulation.operations.includes(role);
+      
+      if (shouldInjectDelay && config.timeoutSimulation.delayMs) {
+        console.log(`\n   🚨 TIMEOUT SIMULATION: Injecting ${config.timeoutSimulation.delayMs}ms delay for ${role} agent`);
+        console.log(`   ⚠️  This is for testing purposes only`);
+      }
+    }
+    
     // Progress indicator
     let progressDots = 0;
     const progressInterval = setInterval(() => {
@@ -40,17 +52,22 @@ export async function executeClaudeAgent(
       process.stdout.write(`\r   ⏳ Waiting for Claude${'.'.repeat(progressDots)}${' '.repeat(3 - progressDots)}`);
     }, 1000);
     
-    // Set a timeout of 30 minutes for Claude to respond
+    // Set a timeout for Claude to respond (accounting for any injected delay)
+    const baseTimeoutMs = 30 * 60 * 1000; // 30 minutes base
+    const injectedDelayMs = (config.timeoutSimulation?.enabled && config.timeoutSimulation?.delayMs) || 0;
+    const totalTimeoutMs = baseTimeoutMs + injectedDelayMs;
+    
     const timeout = setTimeout(() => {
       clearInterval(progressInterval);
-      console.log('\n   ⚠️  Claude execution timed out after 30 minutes');
+      console.log('\n   ⚠️  Claude execution timed out');
+      console.log(`   ⏱️  Timeout details: base=${baseTimeoutMs}ms, delay=${injectedDelayMs}ms, total=${totalTimeoutMs}ms`);
       // Note: exec already has a timeout, this is just for the progress indicator
       resolve({
         success: false,
         output: '',
-        error: 'Claude execution timed out after 30 minutes'
+        error: `Claude execution timed out after ${totalTimeoutMs}ms (including ${injectedDelayMs}ms simulated delay)`
       });
-    }, 30 * 60 * 1000);
+    }, totalTimeoutMs);
     
     // Create a temporary file for the prompt to avoid shell escaping issues
     const tmpDir = path.join(__dirname, '../../.tmp');
@@ -63,13 +80,28 @@ export async function executeClaudeAgent(
     
     console.log(`   DEBUG - Prompt saved to temporary file`);
     console.log(`   DEBUG - Working directory: ${config.workingDirectory}`);
+    console.log(`   DEBUG - Max buffer size: ${maxBufferMB}MB`);
     
-    // Use exec with stdin redirection
-    exec(`${config.claudeExecutable} < ${tmpFile}`, {
+    // Inject delay if timeout simulation is enabled
+    const executeCommand = async () => {
+      if (config.timeoutSimulation?.enabled) {
+        const shouldInjectDelay = !config.timeoutSimulation.operations || 
+          config.timeoutSimulation.operations.includes(role);
+        
+        if (shouldInjectDelay && config.timeoutSimulation.delayMs) {
+          const delayMs = config.timeoutSimulation.delayMs;
+          console.log(`\n   ⏱️  Starting artificial delay of ${delayMs}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+          console.log(`   ✅ Delay completed, proceeding with execution`);
+        }
+      }
+      
+      // Use exec with stdin redirection
+      exec(`${config.claudeExecutable} < ${tmpFile}`, {
       cwd: config.workingDirectory,
       env: { ...process.env },
-      maxBuffer: 10 * 1024 * 1024, // 10MB buffer
-      timeout: 30 * 60 * 1000 // 30 minute timeout
+      maxBuffer: maxBufferMB * 1024 * 1024, // Configurable buffer size
+      timeout: totalTimeoutMs // Dynamic timeout based on configuration
     }, (error, stdout, stderr) => {
       clearTimeout(timeout);
       clearInterval(progressInterval);
@@ -102,5 +134,9 @@ export async function executeClaudeAgent(
         });
       }
     });
+    };
+    
+    // Execute the command (with potential delay)
+    executeCommand();
   });
 }
