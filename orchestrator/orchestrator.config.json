@@ -5,10 +5,20 @@
   "database": "./orchestrator.db",
   "parallelMode": true,
   "maxConcurrentManagers": 2,
+  "maxConcurrentDevelopers": 1,
   "agents": {
     "manager": { "model": "sonnet" },
     "architect": { "model": "opus" },
     "developer": { "model": "opus" },
     "code_quality_reviewer": { "model": "sonnet" }
+  },
+  "logging": {
+    "level": "INFO",
+    "logToFile": true,
+    "logToConsole": true,
+    "logFilePath": "./logs/orchestrator.log",
+    "includeTimestamp": true,
+    "includeStackTrace": true,
+    "maxFileSize": 100
   }
 }

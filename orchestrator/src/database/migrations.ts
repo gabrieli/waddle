@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import { getLogger } from '../utils/logger.js';
 
 export interface Migration {
   version: number;
@@ -28,6 +29,10 @@ export const migrations: Migration[] = [
 ];
 
 export function runMigrations(db: Database.Database): void {
+  const logger = getLogger();
+  
+  logger.debug('Checking for pending migrations');
+  
   // Create migrations table if it doesn't exist
   db.prepare(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -43,20 +48,47 @@ export function runMigrations(db: Database.Database): void {
       .map((row: any) => row.version)
   );
   
+  logger.debug('Applied migrations', { versions: Array.from(appliedVersions) });
+  
   // Run pending migrations
+  let migrationsRun = 0;
   for (const migration of migrations) {
     if (!appliedVersions.has(migration.version)) {
-      console.log(`Running migration ${migration.version}: ${migration.description}`);
+      const migrationId = `migration-${migration.version}`;
+      logger.info(`Running migration ${migration.version}`, { 
+        version: migration.version, 
+        description: migration.description 
+      });
+      
       try {
+        const startTime = Date.now();
+        
         db.transaction(() => {
           migration.up(db);
           db.prepare('INSERT INTO schema_migrations (version) VALUES (?)').run(migration.version);
         })();
-        console.log(`✅ Migration ${migration.version} completed`);
+        
+        const duration = Date.now() - startTime;
+        logger.info(`Migration ${migration.version} completed`, { 
+          version: migration.version,
+          duration,
+          description: migration.description 
+        });
+        migrationsRun++;
       } catch (error) {
-        console.error(`❌ Migration ${migration.version} failed:`, error);
+        logger.error(`Migration ${migration.version} failed`, { 
+          version: migration.version,
+          description: migration.description,
+          error: error as Error 
+        });
         throw error;
       }
     }
+  }
+  
+  if (migrationsRun === 0) {
+    logger.debug('No pending migrations');
+  } else {
+    logger.info('All migrations completed', { count: migrationsRun });
   }
 }

@@ -114,4 +114,17 @@ function displaySummary(workItems: WorkItem[]): void {
   if (pending > 0) {
     console.log(`📌 ${pending} item(s) waiting to be started`);
   }
+  
+  // Show active agent counts
+  const activeAgents = workItems.filter(item => item.processing_agent_id && item.processing_started_at);
+  const activeDevelopers = activeAgents.filter(item => item.processing_agent_id?.startsWith('developer-')).length;
+  const activeManagers = activeAgents.filter(item => item.processing_agent_id?.startsWith('manager-')).length;
+  
+  if (activeAgents.length > 0) {
+    console.log(`\n🤖 Active agents:`);
+    if (activeDevelopers > 0) console.log(`   💻 Developers: ${activeDevelopers}`);
+    if (activeManagers > 0) console.log(`   🎩 Managers: ${activeManagers}`);
+    const otherAgents = activeAgents.length - activeDevelopers - activeManagers;
+    if (otherAgents > 0) console.log(`   🔧 Other agents: ${otherAgents}`);
+  }
 }

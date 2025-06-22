@@ -21,19 +21,24 @@ RECENT HISTORY:
 {history}
 
 RULES:
+- Bug in backlog → assign_bug_buster (to investigate and reproduce)
+- Bug in ready → assign_developer (already investigated)
+- Bug in review → assign_code_quality_reviewer
+- Story in ready → assign_developer  
+- Story in review → assign_code_quality_reviewer
 - Epic in backlog → assign_architect
 - Epic with stories in ready/in_progress → move epic to in_progress and skip (focus on stories)
 - Epic where all stories are done → mark_complete
-- Story in ready → assign_developer  
-- Story in review → assign_code_quality_reviewer
 - Work that's been reviewed and approved → mark_complete
 - If dependencies aren't met → wait
+
+PRIORITY ORDER: Bugs > Stories > Epics
 
 Analyze this ONE item and decide the next action.
 
 Return ONLY valid JSON:
 {
-  "action": "assign_architect|assign_developer|assign_code_quality_reviewer|mark_complete|move_to_in_progress|wait",
+  "action": "assign_architect|assign_developer|assign_bug_buster|assign_code_quality_reviewer|mark_complete|move_to_in_progress|wait",
   "reason": "brief reason for the decision"
 }`;
 
@@ -117,12 +122,29 @@ Description: ${workItem.description || 'No description'}`;
         
       case 'assign_developer':
         console.log(`   💻 Assigning to developer`);
-        await runDeveloperAgent(workItemId, config);
+        
+        // Check developer concurrency limit
+        const { canAssignDeveloper } = await import('../database/utils.js');
+        const maxDevelopers = config.maxConcurrentDevelopers || 1;
+        
+        if (!canAssignDeveloper(maxDevelopers)) {
+          console.log(`   ⚠️  Developer limit reached (max: ${maxDevelopers}). Skipping assignment.`);
+          addHistory(workItemId, 'decision', `Developer limit reached (max: ${maxDevelopers}), will retry later`, 'manager');
+          // Don't change status - leave it in ready so it can be picked up later
+        } else {
+          await runDeveloperAgent(workItemId, config);
+        }
         break;
         
       case 'assign_code_quality_reviewer':
         console.log(`   👀 Assigning to code quality reviewer`);
         await runCodeQualityReviewerAgent(workItemId, config);
+        break;
+        
+      case 'assign_bug_buster':
+        console.log(`   🐛 Assigning to bug buster`);
+        const { runBugBusterAgent } = await import('./bug-buster.js');
+        await runBugBusterAgent(workItemId, config);
         break;
         
       case 'mark_complete':

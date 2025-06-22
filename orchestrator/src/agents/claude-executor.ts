@@ -44,7 +44,7 @@ export async function executeClaudeAgent(
     const timeout = setTimeout(() => {
       clearInterval(progressInterval);
       console.log('\n   ⚠️  Claude execution timed out after 30 minutes');
-      claude.kill();
+      // Note: exec already has a timeout, this is just for the progress indicator
       resolve({
         success: false,
         output: '',

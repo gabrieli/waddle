@@ -1,8 +1,9 @@
 import { WorkItem } from '../types/index.js';
-import { getWorkItem, updateWorkItemStatus, addHistory, claimWorkItem, releaseWorkItem, getWorkItemHistory } from '../database/utils.js';
+import { getWorkItem, updateWorkItemStatus, addHistory, claimWorkItem, releaseWorkItem, getWorkItemHistory, getBugMetadata } from '../database/utils.js';
 import { executeClaudeAgent } from './claude-executor.js';
 import { buildDeveloperPrompt } from './prompts.js';
 import { OrchestratorConfig } from '../orchestrator/config.js';
+import { parseAgentJsonResponse } from './json-parser.js';
 
 export interface DeveloperImplementationResult {
   status: 'completed' | 'blocked' | 'in_progress';
@@ -85,25 +86,19 @@ IMPORTANT: You must ensure all temporary artifacts are removed before marking as
     }
     
     // Parse implementation result
-    let implementation: DeveloperImplementationResult;
-    try {
-      // Extract JSON from the output (Claude might include explanation text)
-      const jsonMatch = result.output.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        throw new Error('No JSON found in response');
-      }
-      implementation = JSON.parse(jsonMatch[0]);
-    } catch (e) {
-      console.error('❌ Failed to parse developer implementation:', e);
-      console.log('Raw output:', result.output);
+    const parseResult = parseAgentJsonResponse<DeveloperImplementationResult>(result.output, 'developer');
+    
+    if (!parseResult.success) {
+      console.error('❌ Failed to parse developer implementation:', parseResult.error);
+      console.log('Raw output:', parseResult.rawOutput);
       
       // Record detailed error for self-healing
       const errorDetails = {
         errorType: 'JSON_PARSE_ERROR',
-        errorMessage: e instanceof Error ? e.message : String(e),
+        errorMessage: parseResult.error || 'Unknown parsing error',
         agentType: 'developer',
         expectedFormat: 'DeveloperImplementationResult JSON',
-        rawOutput: result.output,
+        rawOutput: parseResult.rawOutput,
         workItemId: workItemId,
         workItemTitle: workItem.title,
         timestamp: new Date().toISOString()
@@ -117,6 +112,8 @@ IMPORTANT: You must ensure all temporary artifacts are removed before marking as
       releaseWorkItem(workItemId, agentId);
       return;
     }
+    
+    const implementation = parseResult.data!;
     
     console.log('\n📋 Development Result:');
     console.log(`   Status: ${implementation.status}`);

@@ -13,11 +13,11 @@ try {
   console.log('📤 Exporting current data...');
   
   // Export work_items
-  const workItems = db.prepare('SELECT * FROM work_items').all();
+  const workItems = db.prepare('SELECT * FROM work_items').all() as any[];
   console.log(`   Exported ${workItems.length} work items`);
   
   // Export work_history
-  const workHistory = db.prepare('SELECT * FROM work_history').all();
+  const workHistory = db.prepare('SELECT * FROM work_history').all() as any[];
   console.log(`   Exported ${workHistory.length} history entries`);
   
   // Close current connection

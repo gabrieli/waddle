@@ -1,8 +1,9 @@
 import { WorkItem } from '../types/index.js';
-import { getWorkItem, updateWorkItemStatus, addHistory, claimWorkItem, releaseWorkItem, updateProcessingTimestamp } from '../database/utils.js';
+import { getWorkItem, updateWorkItemStatus, addHistory, claimWorkItem, releaseWorkItem, updateProcessingTimestamp, saveBugMetadata } from '../database/utils.js';
 import { executeClaudeAgent } from './claude-executor.js';
 import { buildBugBusterPrompt } from './prompts.js';
 import { OrchestratorConfig } from '../orchestrator/config.js';
+import { parseAgentJsonResponse } from './json-parser.js';
 
 export interface BugBusterResult {
   status: 'reproduced' | 'cannot_reproduce' | 'blocked';
@@ -60,24 +61,24 @@ export async function runBugBusterAgent(workItemId: string, config: Orchestrator
     }
     
     // Parse result
-    let bugAnalysis: BugBusterResult;
-    try {
-      const jsonMatch = result.output.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        throw new Error('No JSON found in response');
-      }
-      bugAnalysis = JSON.parse(jsonMatch[0]);
-    } catch (e) {
-      console.error('❌ Failed to parse bug buster result:', e);
-      console.log('Raw output:', result.output);
+    const parseResult = parseAgentJsonResponse<BugBusterResult>(result.output, 'bug-buster');
+    
+    if (!parseResult.success) {
+      console.error('❌ Failed to parse bug buster result:', parseResult.error);
+      console.log('Raw output:', parseResult.rawOutput);
       addHistory(workItemId, 'error', JSON.stringify({
         agentType: 'bug-buster',
-        errorType: 'parse_error',
-        errorMessage: 'Failed to parse analysis result',
+        errorType: 'JSON_PARSE_ERROR',
+        errorMessage: parseResult.error || 'Unknown parsing error',
+        rawOutput: parseResult.rawOutput,
+        workItemId: workItemId,
+        bugTitle: bug.title,
         timestamp: new Date().toISOString()
       }), agentId);
       return;
     }
+    
+    const bugAnalysis = parseResult.data!;
     
     // Store the analysis results
     const analysisData = {

@@ -1,11 +1,12 @@
 #!/usr/bin/env node
-import { loadConfig, OrchestratorConfig } from './config.js';
+import { loadConfig, OrchestratorConfig, getLoggerConfig } from './config.js';
 import { initializeDatabase, getDatabase, closeDatabase } from '../database/connection.js';
 import { getAllWorkItems, getWorkItemsByStatus, checkAndReleaseStaleWork, getAvailableWorkItems } from '../database/utils.js';
 import { displayWorkItems } from './display.js';
 import { runManagerAgent } from '../agents/manager.js';
 import { runSingleManagerAgent } from '../agents/manager-single.js';
 import { WorkItem } from '../types/index.js';
+import { createLogger, getLogger } from '../utils/logger.js';
 
 let isShuttingDown = false;
 let intervalId: NodeJS.Timeout | null = null;
@@ -66,6 +67,19 @@ async function main() {
     // Load configuration
     const config = loadConfig();
     console.log('✅ Configuration loaded');
+    
+    // Initialize logger with config
+    const loggerConfig = getLoggerConfig(config);
+    if (loggerConfig) {
+      createLogger(loggerConfig);
+      console.log('✅ Logger initialized');
+    }
+    
+    const logger = getLogger();
+    logger.info('Orchestrator starting', { 
+      parallelMode: config.parallelMode,
+      pollingInterval: config.pollingInterval 
+    });
     
     // Initialize database
     initializeDatabase(config.database);

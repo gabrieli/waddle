@@ -6,6 +6,7 @@ import { OrchestratorConfig } from '../orchestrator/config.js';
 import { runArchitectAgent } from './architect.js';
 import { runDeveloperAgent } from './developer.js';
 import { runCodeQualityReviewerAgent } from './code-quality-reviewer.js';
+import { parseAgentJsonResponse } from './json-parser.js';
 
 export interface ManagerDecisionResult {
   decisions: Array<{
@@ -59,19 +60,39 @@ export async function runManagerAgent(config: OrchestratorConfig): Promise<void>
     }
     
     // Parse decision
-    let decision: ManagerDecisionResult;
-    try {
-      // Extract JSON from the output (Claude might include explanation text)
-      const jsonMatch = result.output.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        throw new Error('No JSON found in response');
-      }
-      decision = JSON.parse(jsonMatch[0]);
-    } catch (e) {
-      console.error('❌ Failed to parse manager decision:', e);
-      console.log('Raw output:', result.output);
+    const parseResult = parseAgentJsonResponse<ManagerDecisionResult>(result.output, 'manager');
+    
+    if (!parseResult.success) {
+      console.error('❌ Failed to parse manager decision:', parseResult.error);
+      console.log('Raw output:', parseResult.rawOutput);
+      
+      // Record error for self-healing
+      const errorDetails = {
+        errorType: 'JSON_PARSE_ERROR',
+        errorMessage: parseResult.error || 'Unknown parsing error',
+        agentType: 'manager',
+        expectedFormat: 'ManagerDecisionResult JSON',
+        rawOutput: parseResult.rawOutput,
+        workItemCount: workItems.length,
+        timestamp: new Date().toISOString()
+      };
+      
+      // Create a special work item to track manager errors
+      const errorId = generateId('BUG');
+      createWorkItem(
+        errorId,
+        'bug',
+        'Manager agent JSON parsing error',
+        `The manager agent failed to parse JSON response.\n\nError: ${errorDetails.errorMessage}\n\nThis prevents the manager from making decisions and orchestrating work.`,
+        null,
+        'backlog'
+      );
+      addHistory(errorId, 'error', JSON.stringify(errorDetails), 'system');
+      
       return;
     }
+    
+    const decision = parseResult.data!;
     
     // Execute decisions
     console.log(`\n📊 Processing ${decision.decisions.length} decisions...`);
@@ -144,8 +165,19 @@ async function executeDecision(decision: any, config: OrchestratorConfig): Promi
         
       case 'assign_developer':
         console.log(`   💻 Assigning to developer`);
-        addHistory(workItemId, 'decision', 'Assigned to developer', 'manager');
-        await runDeveloperAgent(workItemId, config);
+        
+        // Check developer concurrency limit
+        const { canAssignDeveloper } = await import('../database/utils.js');
+        const maxDevelopers = config.maxConcurrentDevelopers || 1;
+        
+        if (!canAssignDeveloper(maxDevelopers)) {
+          console.log(`   ⚠️  Developer limit reached (max: ${maxDevelopers}). Skipping assignment.`);
+          addHistory(workItemId, 'decision', `Developer limit reached (max: ${maxDevelopers}), will retry later`, 'manager');
+          // Don't change status - leave it in ready so it can be picked up later
+        } else {
+          addHistory(workItemId, 'decision', 'Assigned to developer', 'manager');
+          await runDeveloperAgent(workItemId, config);
+        }
         break;
         
       case 'assign_code_quality_reviewer':

@@ -1,5 +1,36 @@
 import { getDatabase } from './connection.js';
 import { WorkItem, WorkHistory, WorkItemType, WorkItemStatus, HistoryAction } from '../types/index.js';
+import { getLogger } from '../utils/logger.js';
+
+const logger = getLogger();
+
+// Helper function to execute queries with logging
+function executeQuery<T>(
+  operation: string,
+  query: string,
+  params: any[],
+  fn: () => T,
+  context?: Record<string, any>
+): T {
+  const startTime = Date.now();
+  
+  try {
+    const result = fn();
+    const duration = Date.now() - startTime;
+    
+    logger.logQuery(query, params, duration);
+    
+    return result;
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    logger.logQuery(query, params, duration);
+    logger.error(`Database operation failed: ${operation}`, { 
+      ...context,
+      error: error as Error 
+    });
+    throw error;
+  }
+}
 
 export function createWorkItem(
   id: string,
@@ -11,12 +42,21 @@ export function createWorkItem(
 ): WorkItem {
   const db = getDatabase();
   
-  const stmt = db.prepare(`
+  const query = `
     INSERT INTO work_items (id, type, parent_id, title, description, status)
     VALUES (?, ?, ?, ?, ?, ?)
-  `);
+  `;
+  const params = [id, type, parentId, title, description, status];
   
-  stmt.run(id, type, parentId, title, description, status);
+  executeQuery(
+    'createWorkItem',
+    query,
+    params,
+    () => db.prepare(query).run(...params),
+    { workItemId: id, type, status }
+  );
+  
+  logger.info('Work item created', { workItemId: id, type, status });
   
   return getWorkItem(id)!;
 }
@@ -24,11 +64,18 @@ export function createWorkItem(
 export function getWorkItem(id: string): WorkItem | null {
   const db = getDatabase();
   
-  const stmt = db.prepare(`
+  const query = `
     SELECT * FROM work_items WHERE id = ?
-  `);
+  `;
+  const params = [id];
   
-  return stmt.get(id) as WorkItem | null;
+  return executeQuery(
+    'getWorkItem',
+    query,
+    params,
+    () => db.prepare(query).get(...params) as WorkItem | null,
+    { workItemId: id }
+  );
 }
 
 export function getAllWorkItems(): WorkItem[] {
@@ -68,19 +115,42 @@ export function getChildWorkItems(parentId: string): WorkItem[] {
 
 export function updateWorkItemStatus(id: string, status: WorkItemStatus, role?: string): void {
   const db = getDatabase();
+  const transactionId = `txn-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`;
   
-  db.transaction(() => {
-    // Update work item
-    const updateStmt = db.prepare(`
-      UPDATE work_items
-      SET status = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `);
-    updateStmt.run(status, id);
+  logger.logTransaction(transactionId, 'begin', { workItemId: id });
+  
+  try {
+    // Get current status for history and logging
+    const currentItem = getWorkItem(id);
+    const fromStatus = currentItem?.status;
     
-    // Add history entry
-    addHistory(id, 'status_change', JSON.stringify({ from: getWorkItem(id)?.status, to: status }), role || 'system');
-  })();
+    db.transaction(() => {
+      // Update work item
+      const updateQuery = `
+        UPDATE work_items
+        SET status = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `;
+      const updateParams = [status, id];
+      
+      executeQuery(
+        'updateWorkItemStatus',
+        updateQuery,
+        updateParams,
+        () => db.prepare(updateQuery).run(...updateParams),
+        { workItemId: id, fromStatus, toStatus: status, transactionId }
+      );
+      
+      // Add history entry
+      addHistory(id, 'status_change', JSON.stringify({ from: fromStatus, to: status }), role || 'system');
+    })();
+    
+    logger.logTransaction(transactionId, 'commit', { workItemId: id });
+    logger.info('Work item status updated', { workItemId: id, from: fromStatus, to: status });
+  } catch (error) {
+    logger.logTransaction(transactionId, 'rollback', { workItemId: id, error: error as Error });
+    throw error;
+  }
 }
 
 export function addHistory(
@@ -122,25 +192,40 @@ export function generateId(prefix: string): string {
 export function claimWorkItem(workItemId: string, agentId: string): boolean {
   const db = getDatabase();
   
+  const query = `
+    UPDATE work_items
+    SET processing_started_at = CURRENT_TIMESTAMP,
+        processing_agent_id = ?,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+      AND (processing_agent_id IS NULL 
+           OR processing_started_at < datetime('now', '-30 minutes'))
+  `;
+  const params = [agentId, workItemId];
+  
   try {
-    // Atomically claim the work item if it's not already being processed
-    const result = db.prepare(`
-      UPDATE work_items
-      SET processing_started_at = CURRENT_TIMESTAMP,
-          processing_agent_id = ?,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-        AND (processing_agent_id IS NULL 
-             OR processing_started_at < datetime('now', '-30 minutes'))
-    `).run(agentId, workItemId);
+    const result = executeQuery(
+      'claimWorkItem',
+      query,
+      params,
+      () => db.prepare(query).run(...params),
+      { workItemId, agentId }
+    );
     
     if (result.changes > 0) {
+      logger.info('Work item claimed', { workItemId, agentId });
       addHistory(workItemId, 'agent_output', `Work claimed by agent ${agentId}`, agentId);
       return true;
     }
+    
+    logger.debug('Failed to claim work item - already locked', { workItemId, agentId });
     return false;
   } catch (error) {
-    console.error('Failed to claim work item:', error);
+    logger.error('Failed to claim work item', { 
+      workItemId, 
+      agentId, 
+      error: error as Error 
+    });
     return false;
   }
 }
@@ -165,7 +250,11 @@ export function releaseWorkItem(workItemId: string, agentId: string): boolean {
     }
     return false;
   } catch (error) {
-    console.error('Failed to release work item:', error);
+    logger.error('Failed to release work item', { 
+      workItemId, 
+      agentId, 
+      error: error as Error 
+    });
     return false;
   }
 }
@@ -202,24 +291,37 @@ export function getAvailableWorkItems(): WorkItem[] {
 export function checkAndReleaseStaleWork(): number {
   const db = getDatabase();
   
+  const query = `
+    UPDATE work_items
+    SET processing_started_at = NULL,
+        processing_agent_id = NULL,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE processing_agent_id IS NOT NULL
+      AND processing_started_at < datetime('now', '-30 minutes')
+  `;
+  
   try {
-    // Release work items that have been locked for more than 30 minutes
-    const result = db.prepare(`
-      UPDATE work_items
-      SET processing_started_at = NULL,
-          processing_agent_id = NULL,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE processing_agent_id IS NOT NULL
-        AND processing_started_at < datetime('now', '-30 minutes')
-    `).run();
+    const result = executeQuery(
+      'checkAndReleaseStaleWork',
+      query,
+      [],
+      () => db.prepare(query).run(),
+      {}
+    );
     
     if (result.changes > 0) {
-      console.log(`Released ${result.changes} stale work locks`);
+      logger.warn(`Released ${result.changes} stale work locks`, { 
+        count: result.changes 
+      });
+    } else {
+      logger.debug('No stale work locks found');
     }
     
     return result.changes;
   } catch (error) {
-    console.error('Failed to release stale work:', error);
+    logger.error('Failed to release stale work', { 
+      error: error as Error 
+    });
     return 0;
   }
 }
@@ -239,7 +341,11 @@ export function updateProcessingTimestamp(workItemId: string, agentId: string): 
     
     return result.changes > 0;
   } catch (error) {
-    console.error('Failed to update processing timestamp:', error);
+    logger.error('Failed to update processing timestamp', { 
+      workItemId, 
+      agentId, 
+      error: error as Error 
+    });
     return false;
   }
 }
@@ -270,10 +376,10 @@ export function updateEpicBasedOnStories(epicId: string, role: string = 'system'
   
   if (allStoriesDone && epic.status !== 'done') {
     updateWorkItemStatus(epicId, 'done', role);
-    console.log(`   ✅ Epic ${epicId} marked as done (all stories completed)`);
+    logger.info('Epic marked as done - all stories completed', { epicId });
   } else if (hasActiveStories && epic.status !== 'in_progress') {
     updateWorkItemStatus(epicId, 'in_progress', role);
-    console.log(`   📝 Epic ${epicId} moved to in_progress (has active stories)`);
+    logger.info('Epic moved to in_progress - has active stories', { epicId });
   }
 }
 
@@ -320,6 +426,37 @@ export function hasUnresolvedError(workItemId: string): boolean {
   return result.count > 0;
 }
 
+// Developer concurrency functions
+
+export function getActiveDeveloperCount(): number {
+  const db = getDatabase();
+  
+  // Count work items currently being processed by developers
+  const stmt = db.prepare(`
+    SELECT COUNT(DISTINCT processing_agent_id) as count
+    FROM work_items
+    WHERE processing_agent_id LIKE 'developer-%'
+      AND processing_started_at > datetime('now', '-30 minutes')
+  `);
+  
+  const result = stmt.get() as { count: number };
+  return result.count;
+}
+
+export function canAssignDeveloper(maxConcurrentDevelopers: number = 1): boolean {
+  const activeDevelopers = getActiveDeveloperCount();
+  const canAssign = activeDevelopers < maxConcurrentDevelopers;
+  
+  if (!canAssign) {
+    logger.debug(`Developer limit reached`, { 
+      activeDevelopers, 
+      maxConcurrentDevelopers 
+    });
+  }
+  
+  return canAssign;
+}
+
 // Bug metadata functions
 
 export interface BugMetadata {
@@ -343,20 +480,33 @@ export function saveBugMetadata(
 ): void {
   const db = getDatabase();
   
-  const stmt = db.prepare(`
+  const query = `
     INSERT OR REPLACE INTO bug_metadata 
     (work_item_id, reproduction_test, root_cause, reproduction_steps, temporary_artifacts, suggested_fix, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-  `);
-  
-  stmt.run(
+  `;
+  const params = [
     workItemId,
     reproductionTest,
     rootCause,
     JSON.stringify(reproductionSteps),
     JSON.stringify(temporaryArtifacts),
     suggestedFix || null
+  ];
+  
+  executeQuery(
+    'saveBugMetadata',
+    query,
+    params,
+    () => db.prepare(query).run(...params),
+    { workItemId, hasReproductionTest: !!reproductionTest, hasRootCause: !!rootCause }
   );
+  
+  logger.info('Bug metadata saved', { 
+    workItemId, 
+    artifactCount: temporaryArtifacts.length,
+    hasSuggestedFix: !!suggestedFix 
+  });
 }
 
 export function getBugMetadata(workItemId: string): BugMetadata | null {
