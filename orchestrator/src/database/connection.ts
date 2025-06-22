@@ -30,6 +30,7 @@ export function initializeDatabase(dbPath?: string): void {
     // Create tables
     database.exec(SCHEMA.work_items);
     database.exec(SCHEMA.work_history);
+    database.exec(SCHEMA.bug_metadata);
     
     // Create indices
     for (const index of SCHEMA.indices) {

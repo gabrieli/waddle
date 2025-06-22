@@ -2,12 +2,12 @@ export const SCHEMA = {
   work_items: `
     CREATE TABLE IF NOT EXISTS work_items (
       id TEXT PRIMARY KEY,
-      type TEXT NOT NULL CHECK(type IN ('epic', 'story', 'task')),
+      type TEXT NOT NULL CHECK(type IN ('epic', 'story', 'task', 'bug')),
       parent_id TEXT,
       title TEXT NOT NULL,
       description TEXT,
       status TEXT NOT NULL CHECK(status IN ('backlog', 'ready', 'in_progress', 'review', 'done')),
-      assigned_role TEXT CHECK(assigned_role IN ('manager', 'architect', 'developer', 'code_quality_reviewer')),
+      assigned_role TEXT CHECK(assigned_role IN ('manager', 'architect', 'developer', 'reviewer', 'bug-buster')),
       processing_started_at TIMESTAMP,
       processing_agent_id TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -20,10 +20,24 @@ export const SCHEMA = {
     CREATE TABLE IF NOT EXISTS work_history (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       work_item_id TEXT NOT NULL,
-      action TEXT NOT NULL CHECK(action IN ('status_change', 'agent_output', 'decision')),
+      action TEXT NOT NULL CHECK(action IN ('status_change', 'agent_output', 'decision', 'error')),
       content TEXT,
       created_by TEXT NOT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (work_item_id) REFERENCES work_items(id)
+    )
+  `,
+  
+  bug_metadata: `
+    CREATE TABLE IF NOT EXISTS bug_metadata (
+      work_item_id TEXT PRIMARY KEY,
+      reproduction_test TEXT,
+      root_cause TEXT,
+      reproduction_steps TEXT,
+      temporary_artifacts TEXT,
+      suggested_fix TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (work_item_id) REFERENCES work_items(id)
     )
   `,

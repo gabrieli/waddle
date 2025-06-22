@@ -64,7 +64,24 @@ export async function runArchitectAgent(workItemId: string, config: Orchestrator
     } catch (e) {
       console.error('❌ Failed to parse architect analysis:', e);
       console.log('Raw output:', result.output);
-      addHistory(workItemId, 'agent_output', 'Failed to parse architect analysis', 'architect');
+      
+      // Record detailed error for self-healing
+      const errorDetails = {
+        errorType: 'JSON_PARSE_ERROR',
+        errorMessage: e instanceof Error ? e.message : String(e),
+        agentType: 'architect',
+        expectedFormat: 'ArchitectAnalysisResult JSON',
+        rawOutput: result.output,
+        workItemId: workItemId,
+        epicTitle: epic.title,
+        timestamp: new Date().toISOString()
+      };
+      
+      addHistory(workItemId, 'error', JSON.stringify(errorDetails), 'architect');
+      addHistory(workItemId, 'agent_output', 'Failed to parse architect analysis - error recorded for investigation', 'architect');
+      
+      // Update status back to backlog so manager can handle
+      updateWorkItemStatus(workItemId, 'backlog', 'architect');
       releaseWorkItem(workItemId, agentId);
       return;
     }

@@ -174,6 +174,7 @@ export function getAvailableWorkItems(): WorkItem[] {
   const db = getDatabase();
   
   // Get work items that are either not being processed or have stale locks
+  // Priority: bugs > stories > epics (within each status level)
   const stmt = db.prepare(`
     SELECT * FROM work_items
     WHERE status NOT IN ('done')
@@ -185,6 +186,12 @@ export function getAvailableWorkItems(): WorkItem[] {
         WHEN 'in_progress' THEN 2
         WHEN 'ready' THEN 3
         ELSE 4
+      END,
+      CASE type
+        WHEN 'bug' THEN 1
+        WHEN 'story' THEN 2
+        WHEN 'task' THEN 3
+        WHEN 'epic' THEN 4
       END,
       created_at ASC
   `);
@@ -268,4 +275,96 @@ export function updateEpicBasedOnStories(epicId: string, role: string = 'system'
     updateWorkItemStatus(epicId, 'in_progress', role);
     console.log(`   📝 Epic ${epicId} moved to in_progress (has active stories)`);
   }
+}
+
+// Error detection functions
+
+export function getRecentErrors(hoursBack: number = 24): Array<{workItemId: string; error: any; history: WorkHistory}> {
+  const db = getDatabase();
+  
+  const stmt = db.prepare(`
+    SELECT * FROM work_history
+    WHERE action = 'error'
+      AND created_at > datetime('now', '-${hoursBack} hours')
+    ORDER BY created_at DESC
+  `);
+  
+  const errors = stmt.all() as WorkHistory[];
+  
+  return errors.map(h => ({
+    workItemId: h.work_item_id,
+    error: JSON.parse(h.content || '{}'),
+    history: h
+  }));
+}
+
+export function hasUnresolvedError(workItemId: string): boolean {
+  const db = getDatabase();
+  
+  // Check if there's an error without a subsequent fix
+  const stmt = db.prepare(`
+    SELECT COUNT(*) as count
+    FROM work_history h1
+    WHERE h1.work_item_id = ?
+      AND h1.action = 'error'
+      AND NOT EXISTS (
+        SELECT 1 FROM work_history h2
+        WHERE h2.work_item_id = h1.work_item_id
+          AND h2.action = 'agent_output'
+          AND h2.created_at > h1.created_at
+          AND h2.content LIKE '%error resolved%'
+      )
+  `);
+  
+  const result = stmt.get(workItemId) as { count: number };
+  return result.count > 0;
+}
+
+// Bug metadata functions
+
+export interface BugMetadata {
+  work_item_id: string;
+  reproduction_test: string | null;
+  root_cause: string | null;
+  reproduction_steps: string | null;
+  temporary_artifacts: string | null;
+  suggested_fix: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export function saveBugMetadata(
+  workItemId: string,
+  reproductionTest: string,
+  rootCause: string,
+  reproductionSteps: string[],
+  temporaryArtifacts: string[],
+  suggestedFix?: string
+): void {
+  const db = getDatabase();
+  
+  const stmt = db.prepare(`
+    INSERT OR REPLACE INTO bug_metadata 
+    (work_item_id, reproduction_test, root_cause, reproduction_steps, temporary_artifacts, suggested_fix, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+  `);
+  
+  stmt.run(
+    workItemId,
+    reproductionTest,
+    rootCause,
+    JSON.stringify(reproductionSteps),
+    JSON.stringify(temporaryArtifacts),
+    suggestedFix || null
+  );
+}
+
+export function getBugMetadata(workItemId: string): BugMetadata | null {
+  const db = getDatabase();
+  
+  const stmt = db.prepare(`
+    SELECT * FROM bug_metadata WHERE work_item_id = ?
+  `);
+  
+  return stmt.get(workItemId) as BugMetadata | null;
 }

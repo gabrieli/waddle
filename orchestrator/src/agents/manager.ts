@@ -1,5 +1,5 @@
 import { WorkItem, ManagerDecision } from '../types/index.js';
-import { getAllWorkItems, getAvailableWorkItems, updateWorkItemStatus, createWorkItem, generateId, addHistory, getWorkItemHistory } from '../database/utils.js';
+import { getAllWorkItems, getAvailableWorkItems, updateWorkItemStatus, createWorkItem, generateId, addHistory, getWorkItemHistory, getWorkItem } from '../database/utils.js';
 import { executeClaudeAgent } from './claude-executor.js';
 import { buildManagerPrompt } from './prompts.js';
 import { OrchestratorConfig } from '../orchestrator/config.js';
@@ -42,8 +42,15 @@ export async function runManagerAgent(config: OrchestratorConfig): Promise<void>
         : `${item.id}: No history`;
     }).join('\n');
     
+    // Get recent errors for self-healing
+    const { getRecentErrors } = await import('../database/utils.js');
+    const recentErrors = getRecentErrors(24); // Last 24 hours
+    const errorsStr = recentErrors.length > 0
+      ? recentErrors.map(e => `- ${e.error.agentType} agent failed on ${e.workItemId}: ${e.error.errorType} - ${e.error.errorMessage}`).join('\n')
+      : 'No recent errors';
+    
     // Build and execute prompt
-    const prompt = buildManagerPrompt(workItems, recentHistory);
+    const prompt = buildManagerPrompt(workItems, recentHistory, errorsStr);
     const result = await executeClaudeAgent('manager', prompt, config);
     
     if (!result.success) {
@@ -145,6 +152,13 @@ async function executeDecision(decision: any, config: OrchestratorConfig): Promi
         console.log(`   👀 Assigning to code quality reviewer`);
         addHistory(workItemId, 'decision', 'Assigned to code quality reviewer', 'manager');
         await runCodeQualityReviewerAgent(workItemId, config);
+        break;
+        
+      case 'assign_bug_buster':
+        console.log(`   👻 Assigning to bug buster`);
+        addHistory(workItemId, 'decision', 'Assigned to bug buster', 'manager');
+        const { runBugBusterAgent } = await import('./bug-buster.js');
+        await runBugBusterAgent(workItemId, config);
         break;
         
       case 'wait':

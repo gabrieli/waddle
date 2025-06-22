@@ -12,7 +12,8 @@ const STATUS_ICONS = {
 const TYPE_ICONS = {
   epic: '🎯',
   story: '📖',
-  task: '📝'
+  task: '📝',
+  bug: '🐛'
 };
 
 export function displayWorkItems(workItems: WorkItem[]): void {

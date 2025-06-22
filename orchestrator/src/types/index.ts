@@ -1,7 +1,7 @@
-export type WorkItemType = 'epic' | 'story' | 'task';
+export type WorkItemType = 'epic' | 'story' | 'task' | 'bug';
 export type WorkItemStatus = 'backlog' | 'ready' | 'in_progress' | 'review' | 'done';
-export type AgentRole = 'manager' | 'architect' | 'developer' | 'reviewer';
-export type HistoryAction = 'status_change' | 'agent_output' | 'decision';
+export type AgentRole = 'manager' | 'architect' | 'developer' | 'reviewer' | 'bug-buster';
+export type HistoryAction = 'status_change' | 'agent_output' | 'decision' | 'error';
 
 export interface WorkItem {
   id: string;
@@ -27,7 +27,7 @@ export interface WorkHistory {
 }
 
 export interface ManagerDecision {
-  action: 'assign_architect' | 'assign_developer' | 'assign_reviewer' | 'mark_complete' | 'create_improvement' | 'wait';
+  action: 'assign_architect' | 'assign_developer' | 'assign_reviewer' | 'assign_bug_buster' | 'mark_complete' | 'create_improvement' | 'wait';
   workItemId?: string;
   improvementType?: WorkItemType;
   improvementTitle?: string;

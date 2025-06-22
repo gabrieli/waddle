@@ -9,12 +9,13 @@ export interface DeveloperImplementationResult {
   implementationNotes: string;
   filesChanged: string[];
   testsAdded: boolean;
+  temporaryArtifactsRemoved?: string[];
   blockers?: string[];
 }
 
 export async function runDeveloperAgent(workItemId: string, config: OrchestratorConfig): Promise<void> {
   const agentId = `developer-${Date.now()}`;
-  console.log(`\n💻 Developer Agent: Implementing story ${workItemId}...`);
+  console.log(`\n💻 Developer Agent: Implementing ${workItemId}...`);
   
   try {
     // Try to claim the work item
@@ -23,10 +24,10 @@ export async function runDeveloperAgent(workItemId: string, config: Orchestrator
       return;
     }
 
-    // Get the story details
-    const story = getWorkItem(workItemId);
-    if (!story || story.type !== 'story') {
-      console.error('❌ Work item not found or not a story');
+    // Get the work item details
+    const workItem = getWorkItem(workItemId);
+    if (!workItem || (workItem.type !== 'story' && workItem.type !== 'bug')) {
+      console.error('❌ Work item not found or not a story/bug');
       releaseWorkItem(workItemId, agentId);
       return;
     }
@@ -34,10 +35,30 @@ export async function runDeveloperAgent(workItemId: string, config: Orchestrator
     // Update status to in_progress
     updateWorkItemStatus(workItemId, 'in_progress', 'developer');
     
-    // Get technical context from parent epic's architect analysis
+    // Get technical context based on work item type
     let technicalContext = 'No technical context available';
-    if (story.parent_id) {
-      const epicHistory = getWorkItemHistory(story.parent_id);
+    
+    if (workItem.type === 'bug') {
+      // For bugs, get the bug analysis from Bug Buster
+      const { getBugMetadata } = await import('../database/utils.js');
+      const bugMetadata = getBugMetadata(workItemId);
+      
+      if (bugMetadata) {
+        const reproSteps = JSON.parse(bugMetadata.reproduction_steps || '[]');
+        const tempArtifacts = JSON.parse(bugMetadata.temporary_artifacts || '[]');
+        
+        technicalContext = `Bug Analysis:
+Root Cause: ${bugMetadata.root_cause}
+Suggested Fix: ${bugMetadata.suggested_fix || 'None provided'}
+Reproduction Test:
+${bugMetadata.reproduction_test}
+Temporary Artifacts to Clean: ${tempArtifacts.join(', ')}
+
+IMPORTANT: You must ensure all temporary artifacts are removed before marking as complete.`;
+      }
+    } else if (workItem.parent_id) {
+      // For stories, get architect analysis from parent epic
+      const epicHistory = getWorkItemHistory(workItem.parent_id);
       const architectOutput = epicHistory.find(h => 
         h.action === 'agent_output' && h.created_by === 'architect'
       );
@@ -53,7 +74,7 @@ export async function runDeveloperAgent(workItemId: string, config: Orchestrator
     }
     
     // Build and execute prompt
-    const prompt = buildDeveloperPrompt(story, technicalContext);
+    const prompt = buildDeveloperPrompt(workItem, technicalContext);
     const result = await executeClaudeAgent('developer', prompt, config);
     
     if (!result.success) {
@@ -75,7 +96,24 @@ export async function runDeveloperAgent(workItemId: string, config: Orchestrator
     } catch (e) {
       console.error('❌ Failed to parse developer implementation:', e);
       console.log('Raw output:', result.output);
-      addHistory(workItemId, 'agent_output', 'Failed to parse implementation result', 'developer');
+      
+      // Record detailed error for self-healing
+      const errorDetails = {
+        errorType: 'JSON_PARSE_ERROR',
+        errorMessage: e instanceof Error ? e.message : String(e),
+        agentType: 'developer',
+        expectedFormat: 'DeveloperImplementationResult JSON',
+        rawOutput: result.output,
+        workItemId: workItemId,
+        workItemTitle: workItem.title,
+        timestamp: new Date().toISOString()
+      };
+      
+      addHistory(workItemId, 'error', JSON.stringify(errorDetails), 'developer');
+      addHistory(workItemId, 'agent_output', 'Failed to parse implementation result - error recorded for investigation', 'developer');
+      
+      // Update status back to ready so it can be retried
+      updateWorkItemStatus(workItemId, 'ready', 'developer');
       releaseWorkItem(workItemId, agentId);
       return;
     }
@@ -85,21 +123,25 @@ export async function runDeveloperAgent(workItemId: string, config: Orchestrator
     console.log(`   Files changed: ${implementation.filesChanged.length}`);
     console.log(`   Tests added: ${implementation.testsAdded ? 'Yes' : 'No'}`);
     
+    if (workItem.type === 'bug' && implementation.temporaryArtifactsRemoved) {
+      console.log(`   Temporary artifacts cleaned: ${implementation.temporaryArtifactsRemoved.length}`);
+    }
+    
     // Record the implementation details
     addHistory(workItemId, 'agent_output', JSON.stringify(implementation), 'developer');
     
-    // Update story status based on implementation result
+    // Update work item status based on implementation result
     switch (implementation.status) {
       case 'completed':
         updateWorkItemStatus(workItemId, 'review', 'developer');
-        console.log(`   ✅ Story implementation complete, moved to review`);
+        console.log(`   ✅ ${workItem.type} implementation complete, moved to review`);
         break;
       case 'blocked':
-        console.log(`   ⚠️  Story blocked: ${implementation.blockers?.join(', ')}`);
+        console.log(`   ⚠️  ${workItem.type} blocked: ${implementation.blockers?.join(', ')}`);
         addHistory(workItemId, 'decision', `Blocked: ${implementation.blockers?.join(', ')}`, 'developer');
         break;
       case 'in_progress':
-        console.log(`   ⏳ Story still in progress`);
+        console.log(`   ⏳ ${workItem.type} still in progress`);
         break;
     }
     

@@ -73,7 +73,23 @@ export async function runCodeQualityReviewerAgent(workItemId: string, config: Or
     } catch (e) {
       console.error('❌ Failed to parse code quality review:', e);
       console.log('Raw output:', result.output);
-      addHistory(workItemId, 'agent_output', 'Failed to parse review result', 'code-quality-reviewer');
+      
+      // Record detailed error for self-healing
+      const errorDetails = {
+        errorType: 'JSON_PARSE_ERROR',
+        errorMessage: e instanceof Error ? e.message : String(e),
+        agentType: 'code-quality-reviewer',
+        expectedFormat: 'CodeQualityReviewResult JSON',
+        rawOutput: result.output,
+        workItemId: workItemId,
+        workItemTitle: workItem.title,
+        timestamp: new Date().toISOString()
+      };
+      
+      addHistory(workItemId, 'error', JSON.stringify(errorDetails), 'code-quality-reviewer');
+      addHistory(workItemId, 'agent_output', 'Failed to parse review result - error recorded for investigation', 'code-quality-reviewer');
+      
+      // Keep in review status for retry
       releaseWorkItem(workItemId, agentId);
       return;
     }

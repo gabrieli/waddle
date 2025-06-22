@@ -46,6 +46,7 @@ function displayWorkItems(items: WorkItem[]) {
   const epics = items.filter(item => item.type === 'epic');
   const stories = items.filter(item => item.type === 'story');
   const tasks = items.filter(item => item.type === 'task');
+  const bugs = items.filter(item => item.type === 'bug');
   
   // Build hierarchy map
   const childrenMap = new Map<string, WorkItem[]>();
@@ -88,11 +89,20 @@ function displayWorkItems(items: WorkItem[]) {
     console.log('');
   }
   
+  // Display bugs (always at top level)
+  if (bugs.length > 0) {
+    console.log('🚨 Bugs (High Priority):');
+    bugs.forEach(bug => {
+      displayItem(bug, 0, childrenMap);
+    });
+    console.log('');
+  }
+  
   // Summary
   console.log('─'.repeat(80));
   console.log('SUMMARY:');
   console.log(`  Total items: ${items.length}`);
-  console.log(`  Epics: ${epics.length}, Stories: ${stories.length}, Tasks: ${tasks.length}`);
+  console.log(`  Epics: ${epics.length}, Stories: ${stories.length}, Tasks: ${tasks.length}, Bugs: ${bugs.length}`);
   
   // Status breakdown
   const statusCounts = items.reduce((acc, item) => {
@@ -109,7 +119,7 @@ function displayWorkItems(items: WorkItem[]) {
 
 function displayItem(item: WorkItem, indent: number, childrenMap: Map<string, WorkItem[]>) {
   const prefix = '  '.repeat(indent);
-  const typeEmoji = { epic: '🎯', story: '📖', task: '📝' }[item.type];
+  const typeEmoji = { epic: '🎯', story: '📖', task: '📝', bug: '🐛' }[item.type];
   const statusBadge = `[${item.status.toUpperCase()}]`;
   
   console.log(`${prefix}${typeEmoji} ${item.id} ${statusBadge} - ${item.title}`);
