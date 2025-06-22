@@ -7,6 +7,8 @@ WORK ITEMS:
 
 RULES:
 - Epics in backlog → assign_architect
+- Epics with stories in ready/in_progress → move epic to in_progress and skip (focus on stories)
+- Epics where all stories are done → mark_complete
 - Stories in ready → assign_developer
 - Stories in review → assign_code_quality_reviewer or mark_complete
 - Completed work → mark_complete

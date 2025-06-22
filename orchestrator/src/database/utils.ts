@@ -236,3 +236,36 @@ export function updateProcessingTimestamp(workItemId: string, agentId: string): 
     return false;
   }
 }
+
+// Epic management functions
+
+export function checkEpicStatus(epicId: string): { hasActiveStories: boolean; allStoriesDone: boolean } {
+  const stories = getChildWorkItems(epicId);
+  
+  if (stories.length === 0) {
+    return { hasActiveStories: false, allStoriesDone: false };
+  }
+  
+  const hasActiveStories = stories.some(story => 
+    story.status === 'ready' || story.status === 'in_progress' || story.status === 'review'
+  );
+  
+  const allStoriesDone = stories.every(story => story.status === 'done');
+  
+  return { hasActiveStories, allStoriesDone };
+}
+
+export function updateEpicBasedOnStories(epicId: string, role: string = 'system'): void {
+  const epic = getWorkItem(epicId);
+  if (!epic || epic.type !== 'epic') return;
+  
+  const { hasActiveStories, allStoriesDone } = checkEpicStatus(epicId);
+  
+  if (allStoriesDone && epic.status !== 'done') {
+    updateWorkItemStatus(epicId, 'done', role);
+    console.log(`   ✅ Epic ${epicId} marked as done (all stories completed)`);
+  } else if (hasActiveStories && epic.status !== 'in_progress') {
+    updateWorkItemStatus(epicId, 'in_progress', role);
+    console.log(`   📝 Epic ${epicId} moved to in_progress (has active stories)`);
+  }
+}

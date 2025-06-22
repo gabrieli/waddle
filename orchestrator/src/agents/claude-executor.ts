@@ -1,6 +1,13 @@
-import { spawn } from 'child_process';
+import { exec } from 'child_process';
 import { WorkItem } from '../types/index.js';
 import { OrchestratorConfig } from '../orchestrator/config.js';
+import * as fs from 'fs';
+import * as path from 'path';
+import { fileURLToPath } from 'url';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export interface AgentExecutionResult {
   success: boolean;
@@ -14,7 +21,6 @@ export async function executeClaudeAgent(
   config: OrchestratorConfig
 ): Promise<AgentExecutionResult> {
   return new Promise((resolve) => {
-    const args = ['-p', prompt];
     const startTime = Date.now();
     
     console.log(`\n🤖 Executing ${role} agent...`);
@@ -34,85 +40,67 @@ export async function executeClaudeAgent(
       process.stdout.write(`\r   ⏳ Waiting for Claude${'.'.repeat(progressDots)}${' '.repeat(3 - progressDots)}`);
     }, 1000);
     
-    // Set a timeout of 5 minutes for Claude to respond
+    // Set a timeout of 30 minutes for Claude to respond
     const timeout = setTimeout(() => {
       clearInterval(progressInterval);
-      console.log('\n   ⚠️  Claude execution timed out after 5 minutes');
+      console.log('\n   ⚠️  Claude execution timed out after 30 minutes');
       claude.kill();
       resolve({
         success: false,
         output: '',
-        error: 'Claude execution timed out after 5 minutes'
+        error: 'Claude execution timed out after 30 minutes'
       });
-    }, 5 * 60 * 1000);
+    }, 30 * 60 * 1000);
     
-    const claude = spawn(config.claudeExecutable, args, {
+    // Create a temporary file for the prompt to avoid shell escaping issues
+    const tmpDir = path.join(__dirname, '../../.tmp');
+    if (!fs.existsSync(tmpDir)) {
+      fs.mkdirSync(tmpDir, { recursive: true });
+    }
+    
+    const tmpFile = path.join(tmpDir, `prompt-${Date.now()}-${Math.random().toString(36).substring(2, 7)}.txt`);
+    fs.writeFileSync(tmpFile, prompt);
+    
+    console.log(`   DEBUG - Prompt saved to temporary file`);
+    console.log(`   DEBUG - Working directory: ${config.workingDirectory}`);
+    
+    // Use exec with stdin redirection
+    exec(`${config.claudeExecutable} < ${tmpFile}`, {
       cwd: config.workingDirectory,
       env: { ...process.env },
-      shell: false
-    });
-    
-    let output = '';
-    let error = '';
-    
-    let hasOutput = false;
-    claude.stdout.on('data', (data) => {
-      if (!hasOutput) {
-        clearInterval(progressInterval);
-        console.log('\n   📤 Claude response:');
-        hasOutput = true;
-      }
-      const chunk = data.toString();
-      output += chunk;
-      // Show output in real-time
-      const lines = chunk.split('\n');
-      lines.forEach((line: string) => {
-        if (line.trim()) {
-          console.log(`      ${line}`);
-        }
-      });
-    });
-    
-    claude.stderr.on('data', (data) => {
-      const errorChunk = data.toString();
-      error += errorChunk;
-      // Log stderr in debug mode
-      if (process.env.DEBUG === 'true') {
-        console.error(`   ⚠️  stderr: ${errorChunk}`);
-      }
-    });
-    
-    claude.on('close', (code) => {
+      maxBuffer: 10 * 1024 * 1024, // 10MB buffer
+      timeout: 30 * 60 * 1000 // 30 minute timeout
+    }, (error, stdout, stderr) => {
       clearTimeout(timeout);
       clearInterval(progressInterval);
+      
+      // Clean up temp file
+      try {
+        fs.unlinkSync(tmpFile);
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+      
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
       console.log(`\n   ⏱️  Execution time: ${elapsed}s`);
-      console.log(`   Claude exited with code: ${code}`);
       
-      if (code === 0) {
-        resolve({
-          success: true,
-          output: output.trim()
-        });
-      } else {
-        console.error(`   ❌ Error output: ${error.trim() || 'No error output'}`);
+      if (error) {
+        console.error(`   ❌ Error: ${error.message}`);
+        if (stderr) {
+          console.error(`   ❌ Stderr: ${stderr}`);
+        }
         resolve({
           success: false,
-          output: output.trim(),
-          error: error.trim() || `Process exited with code ${code}`
+          output: stdout || '',
+          error: error.message
+        });
+      } else {
+        console.log(`   📤 Claude response received`);
+        resolve({
+          success: true,
+          output: stdout.trim()
         });
       }
-    });
-    
-    claude.on('error', (err) => {
-      clearTimeout(timeout);
-      clearInterval(progressInterval);
-      console.error(`\n   ❌ Failed to spawn Claude: ${err.message}`);
-      resolve({
-        success: false,
-        output: '',
-        error: err.message
-      });
     });
   });
 }

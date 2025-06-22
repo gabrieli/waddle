@@ -110,11 +110,23 @@ async function executeDecision(decision: any, config: OrchestratorConfig): Promi
       case 'mark_complete':
         updateWorkItemStatus(workItemId, 'done', 'manager');
         console.log(`   ✅ Marked as complete`);
+        
+        // Check if this was a story and update parent epic if needed
+        const workItem = getWorkItem(workItemId);
+        if (workItem && workItem.type === 'story' && workItem.parent_id) {
+          const { updateEpicBasedOnStories } = await import('../database/utils.js');
+          updateEpicBasedOnStories(workItem.parent_id, 'manager');
+        }
         break;
         
       case 'move_to_ready':
         updateWorkItemStatus(workItemId, 'ready', 'manager');
         console.log(`   ✅ Moved to ready`);
+        break;
+        
+      case 'move_to_in_progress':
+        updateWorkItemStatus(workItemId, 'in_progress', 'manager');
+        console.log(`   📝 Moved to in_progress`);
         break;
         
       case 'assign_architect':

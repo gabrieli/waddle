@@ -22,6 +22,8 @@ RECENT HISTORY:
 
 RULES:
 - Epic in backlog → assign_architect
+- Epic with stories in ready/in_progress → move epic to in_progress and skip (focus on stories)
+- Epic where all stories are done → mark_complete
 - Story in ready → assign_developer  
 - Story in review → assign_code_quality_reviewer
 - Work that's been reviewed and approved → mark_complete
@@ -31,7 +33,7 @@ Analyze this ONE item and decide the next action.
 
 Return ONLY valid JSON:
 {
-  "action": "assign_architect|assign_developer|assign_code_quality_reviewer|mark_complete|wait",
+  "action": "assign_architect|assign_developer|assign_code_quality_reviewer|mark_complete|move_to_in_progress|wait",
   "reason": "brief reason for the decision"
 }`;
 
@@ -126,6 +128,18 @@ Description: ${workItem.description || 'No description'}`;
       case 'mark_complete':
         updateWorkItemStatus(workItemId, 'done', 'manager');
         console.log(`   ✅ Marked as complete`);
+        
+        // Check if this was a story and update parent epic if needed
+        const workItem = getWorkItem(workItemId);
+        if (workItem && workItem.type === 'story' && workItem.parent_id) {
+          const { updateEpicBasedOnStories } = await import('../database/utils.js');
+          updateEpicBasedOnStories(workItem.parent_id, 'manager');
+        }
+        break;
+        
+      case 'move_to_in_progress':
+        updateWorkItemStatus(workItemId, 'in_progress', 'manager');
+        console.log(`   📝 Moved to in_progress`);
         break;
         
       case 'wait':
