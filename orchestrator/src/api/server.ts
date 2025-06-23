@@ -22,7 +22,7 @@ export function createApiServer(): Express {
     logger.info('API request', {
       method: req.method,
       path: req.path,
-      query: req.query,
+      query: JSON.stringify(req.query),
       ip: req.ip
     });
     next();
@@ -96,7 +96,7 @@ export function startApiServer(port: number = 3000): void {
     });
     
   } catch (error) {
-    logger.error('Failed to start API server', { error });
+    logger.error('Failed to start API server', { error: error as Error });
     process.exit(1);
   }
 }

@@ -559,3 +559,34 @@ export function updateMessageStatus(
   
   return false;
 }
+
+export function markMessageAsDelivered(id: string): boolean {
+  return updateMessageStatus(id, 'delivered', 'delivered_at');
+}
+
+export function getUndeliveredMessages(agentId: string): AgentCommunication[] {
+  return getMessagesForAgent(agentId, 'pending');
+}
+
+export function supersedeADR(oldAdrId: string, newAdrId: string): boolean {
+  const db = getDatabase();
+  
+  // First, update the old ADR
+  const updateOld = updateADRStatus(oldAdrId, 'superseded', newAdrId);
+  
+  if (!updateOld) {
+    return false;
+  }
+  
+  // Then, ensure the new ADR is accepted
+  const updateNew = updateADRStatus(newAdrId, 'accepted');
+  
+  if (!updateNew) {
+    // Rollback the old ADR update if the new one fails
+    updateADRStatus(oldAdrId, 'accepted');
+    return false;
+  }
+  
+  logger.info('ADR superseded', { oldAdrId, newAdrId });
+  return true;
+}

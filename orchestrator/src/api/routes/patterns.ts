@@ -7,6 +7,7 @@ import {
 } from '../../database/knowledge.js';
 import { PatternFilter, PatternType } from '../../types/knowledge.js';
 import { AgentRole } from '../../types/index.js';
+import { accessControl } from '../middleware/access-control.js';
 
 const router = Router();
 
@@ -50,10 +51,15 @@ router.get('/', (req: Request, res: Response) => {
       );
     }
     
+    // Apply access control filtering
+    const userRole = (req as any).userRole || req.headers['x-user-role'] as string;
+    const hasApiKey = (req as any).hasValidApiKey || false;
+    const filteredResults = accessControl.filterPatterns(results, userRole, hasApiKey);
+    
     res.json({
       success: true,
-      count: results.length,
-      patterns: results
+      count: filteredResults.length,
+      patterns: filteredResults
     });
   } catch (error: any) {
     res.status(500).json({
@@ -75,9 +81,14 @@ router.get('/:id', (req: Request, res: Response) => {
       });
     }
     
+    // Apply access control for single pattern
+    const userRole = (req as any).userRole || req.headers['x-user-role'] as string;
+    const hasApiKey = (req as any).hasValidApiKey || false;
+    const [filteredPattern] = accessControl.filterPatterns([pattern], userRole, hasApiKey);
+    
     res.json({
       success: true,
-      pattern
+      pattern: filteredPattern
     });
   } catch (error: any) {
     res.status(500).json({
@@ -139,6 +150,21 @@ router.put('/:id/effectiveness', (req: Request, res: Response) => {
     res.json({
       success: true,
       message: 'Pattern effectiveness updated'
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// GET /api/patterns/access/status - Get access control status
+router.get('/access/status', (req: Request, res: Response) => {
+  try {
+    res.json({
+      success: true,
+      access_control: accessControl.getStatus()
     });
   } catch (error: any) {
     res.status(500).json({

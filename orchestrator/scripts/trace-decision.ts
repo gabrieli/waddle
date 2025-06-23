@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { initializeDatabase, closeDatabase } from '../src/database/connection.js';
-import { getWorkItem, getWorkHistory } from '../src/database/utils.js';
+import { getWorkItem, getWorkItemHistory } from '../src/database/utils.js';
 import { 
   getPatternsByFilter, 
   getADRsByWorkItem,
@@ -242,7 +242,7 @@ async function main() {
     }
     
     // Get work history
-    const history = getWorkHistory(options.workItemId);
+    const history = getWorkItemHistory(options.workItemId);
     
     // Extract pattern references from history
     const patternIds = extractPatternsFromHistory(history);

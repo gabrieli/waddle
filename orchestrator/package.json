@@ -20,19 +20,23 @@
     "query-knowledge": "tsx scripts/query-knowledge.ts",
     "trace-decision": "tsx scripts/trace-decision.ts"
   },
-  "keywords": ["orchestrator", "autonomous", "development"],
+  "keywords": [
+    "orchestrator",
+    "autonomous",
+    "development"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
     "better-sqlite3": "^11.6.0",
-    "express": "^4.18.2",
-    "cors": "^2.8.5"
+    "cors": "^2.8.5",
+    "express": "^4.18.2"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.8",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^4.17.23",
     "@types/node": "^20.10.5",
-    "@types/express": "^4.17.21",
-    "@types/cors": "^2.8.17",
     "tsx": "^4.7.0",
     "typescript": "^5.3.3"
   }

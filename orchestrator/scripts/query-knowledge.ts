@@ -17,6 +17,9 @@ import {
   ADRStatus
 } from '../src/types/knowledge.js';
 import { AgentRole } from '../src/types/index.js';
+import { defaultContextManager } from '../src/agents/context-manager.js';
+import { getWorkItemHistory } from '../src/database/utils.js';
+import { accessControl } from '../src/api/middleware/access-control.js';
 
 interface QueryOptions {
   command?: string;
@@ -28,6 +31,10 @@ interface QueryOptions {
   limit?: number;
   search?: string;
   export?: boolean;
+  decision?: string;
+  includeContext?: boolean;
+  role?: string;
+  apiKey?: string;
 }
 
 function printUsage() {
@@ -38,6 +45,8 @@ function printUsage() {
   console.log('  adrs        Search and view Architecture Decision Records');
   console.log('  reviews     View reviews for a work item');
   console.log('  messages    View agent communications');
+  console.log('  trace       Trace decision making process for a work item');
+  console.log('  context     Show historical context for a work item');
   console.log('');
   console.log('Options:');
   console.log('  --type, -t       Pattern type (solution, approach, tool_usage, error_handling, optimization)');
@@ -48,12 +57,18 @@ function printUsage() {
   console.log('  --limit, -l      Maximum number of results');
   console.log('  --search         Search text in patterns/ADRs');
   console.log('  --export, -e     Export results to JSON file');
+  console.log('  --decision       Decision ID to trace (for trace command)');
+  console.log('  --include-context Include full historical context in export');
+  console.log('  --role           User role for access control (architect, security, etc.)');
+  console.log('  --api-key        API key for accessing sensitive patterns');
   console.log('');
   console.log('Examples:');
   console.log('  npm run query-knowledge -- patterns --agent developer --type solution');
   console.log('  npm run query-knowledge -- adrs --status accepted');
   console.log('  npm run query-knowledge -- reviews --work-item STORY-ABC123');
   console.log('  npm run query-knowledge -- patterns --search "error handling" --export');
+  console.log('  npm run query-knowledge -- trace --work-item STORY-ABC123');
+  console.log('  npm run query-knowledge -- context --work-item STORY-ABC123 --export');
 }
 
 function parseArgs(args: string[]): QueryOptions {
@@ -121,6 +136,27 @@ function parseArgs(args: string[]): QueryOptions {
       case '-e':
         result.export = true;
         break;
+      case '--decision':
+        if (nextArg) {
+          result.decision = nextArg;
+          i++;
+        }
+        break;
+      case '--include-context':
+        result.includeContext = true;
+        break;
+      case '--role':
+        if (nextArg) {
+          result.role = nextArg;
+          i++;
+        }
+        break;
+      case '--api-key':
+        if (nextArg) {
+          result.apiKey = nextArg;
+          i++;
+        }
+        break;
     }
   }
   
@@ -133,13 +169,22 @@ function displayPattern(pattern: Pattern, index: number) {
   console.log(`   Type: ${pattern.pattern_type} | Agent: ${pattern.agent_role}`);
   console.log(`   Effectiveness: ${(pattern.effectiveness_score * 100).toFixed(1)}% | Used: ${pattern.usage_count} times`);
   console.log(`   Context: ${pattern.context}`);
-  console.log(`   Solution: ${pattern.solution}`);
   
+  // Check if pattern is redacted
   if (pattern.metadata) {
     const metadata = JSON.parse(pattern.metadata);
+    if (metadata.redacted) {
+      console.log(`   Solution: ${pattern.solution}`);
+      console.log(`   ⚠️  Access restricted: ${metadata.reason || 'sensitive content'}`);
+    } else {
+      console.log(`   Solution: ${pattern.solution}`);
+    }
+    
     if (metadata.tags) {
       console.log(`   Tags: ${metadata.tags.join(', ')}`);
     }
+  } else {
+    console.log(`   Solution: ${pattern.solution}`);
   }
   
   if (pattern.work_item_ids) {
@@ -255,6 +300,10 @@ async function queryPatterns(options: QueryOptions) {
     patterns = searchPatterns(patterns, options.search);
   }
   
+  // Apply access control filtering
+  const hasApiKey = options.apiKey === process.env.KNOWLEDGE_BASE_API_KEY || options.apiKey === 'dev-api-key';
+  patterns = accessControl.filterPatterns(patterns, options.role, hasApiKey);
+  
   if (patterns.length === 0) {
     console.log('No patterns found matching your criteria.');
     return;
@@ -361,6 +410,182 @@ async function queryMessages(options: QueryOptions) {
   }
 }
 
+async function traceDecision(options: QueryOptions) {
+  if (!options.workItem) {
+    console.error('❌ Error: --work-item is required for decision tracing');
+    process.exit(1);
+  }
+
+  console.log(`\n🔍 Tracing decision process for work item ${options.workItem}`);
+  console.log('='.repeat(80));
+
+  // Get work item history
+  const history = getWorkItemHistory(options.workItem);
+  
+  if (history.length === 0) {
+    console.log('No history found for this work item.');
+    return;
+  }
+
+  // Get historical context that influenced decisions
+  const context = await defaultContextManager.getContextForWorkItem(options.workItem);
+  
+  // Extract decision points from history
+  const decisions = history.filter(h => 
+    h.action === 'decision' || 
+    (h.action === 'agent_output' && h.content?.includes('decision'))
+  );
+
+  console.log(`\n📊 Decision Timeline:`);
+  console.log('-'.repeat(60));
+  
+  decisions.forEach((decision, index) => {
+    console.log(`\n${index + 1}. ${new Date(decision.created_at).toLocaleString()}`);
+    console.log(`   Agent: ${decision.created_by}`);
+    console.log(`   Action: ${decision.action}`);
+    
+    try {
+      const content = JSON.parse(decision.content || '{}');
+      if (content.decision) {
+        console.log(`   Decision: ${content.decision}`);
+      }
+      if (content.rationale) {
+        console.log(`   Rationale: ${content.rationale}`);
+      }
+    } catch {
+      console.log(`   Content: ${decision.content}`);
+    }
+  });
+
+  // Show influencing context
+  console.log(`\n💡 Influencing Context:`);
+  console.log('-'.repeat(60));
+  
+  if (context.successPatterns.length > 0) {
+    console.log('\n✅ Success Patterns Applied:');
+    context.successPatterns.forEach(pattern => console.log(`   - ${pattern}`));
+  }
+  
+  if (context.errorPatterns.length > 0) {
+    console.log('\n⚠️  Error Patterns Avoided:');
+    context.errorPatterns.forEach(pattern => console.log(`   - ${pattern}`));
+  }
+
+  // Show relevant patterns used
+  const relevantPatterns = getPatternsByFilter({
+    work_item_ids: [options.workItem]
+  });
+  
+  if (relevantPatterns.length > 0) {
+    console.log('\n📚 Patterns Used:');
+    relevantPatterns.forEach((pattern, index) => {
+      console.log(`   ${index + 1}. ${pattern.pattern_type}: ${pattern.context.substring(0, 100)}...`);
+      console.log(`      Effectiveness: ${(pattern.effectiveness_score * 100).toFixed(1)}%`);
+    });
+  }
+
+  // Show relevant ADRs
+  const adrs = getADRsByWorkItem(options.workItem);
+  if (adrs.length > 0) {
+    console.log('\n📋 Architecture Decisions:');
+    adrs.forEach((adr, index) => {
+      console.log(`   ${index + 1}. ${adr.title} (${adr.status})`);
+    });
+  }
+
+  if (options.export) {
+    const exportData = {
+      workItemId: options.workItem,
+      decisions,
+      context: options.includeContext ? context : {
+        successPatterns: context.successPatterns,
+        errorPatterns: context.errorPatterns
+      },
+      patterns: relevantPatterns,
+      adrs,
+      timestamp: new Date().toISOString()
+    };
+    
+    const filename = `decision-trace-${options.workItem}-${Date.now()}.json`;
+    const fs = await import('fs');
+    fs.writeFileSync(filename, JSON.stringify(exportData, null, 2));
+    console.log(`\n✅ Exported to ${filename}`);
+  }
+}
+
+async function showContext(options: QueryOptions) {
+  if (!options.workItem) {
+    console.error('❌ Error: --work-item is required for showing context');
+    process.exit(1);
+  }
+
+  console.log(`\n📖 Historical Context for work item ${options.workItem}`);
+  console.log('='.repeat(80));
+
+  const context = await defaultContextManager.getContextForWorkItem(options.workItem);
+  
+  // Display relevant history
+  if (context.relevantHistory.length > 0) {
+    console.log('\n📜 Relevant History:');
+    console.log('-'.repeat(60));
+    context.relevantHistory.forEach((item, index) => {
+      console.log(`\n${index + 1}. ${new Date(item.created_at).toLocaleString()}`);
+      console.log(`   Action: ${item.action} by ${item.created_by}`);
+      
+      try {
+        const content = JSON.parse(item.content || '{}');
+        console.log(`   Summary: ${JSON.stringify(content).substring(0, 200)}...`);
+      } catch {
+        console.log(`   Content: ${item.content?.substring(0, 200)}...`);
+      }
+    });
+  }
+
+  // Display related work items
+  if (context.relatedItems.length > 0) {
+    console.log('\n🔗 Related Work Items:');
+    console.log('-'.repeat(60));
+    context.relatedItems.forEach((item, index) => {
+      console.log(`   ${index + 1}. ${item.id}: ${item.title} (${item.status})`);
+      console.log(`      Type: ${item.type} | Priority: ${item.priority}`);
+    });
+  }
+
+  // Display patterns
+  if (context.successPatterns.length > 0) {
+    console.log('\n✅ Success Patterns:');
+    console.log('-'.repeat(60));
+    context.successPatterns.forEach(pattern => console.log(`   - ${pattern}`));
+  }
+
+  if (context.errorPatterns.length > 0) {
+    console.log('\n⚠️  Error Patterns:');
+    console.log('-'.repeat(60));
+    context.errorPatterns.forEach(pattern => console.log(`   - ${pattern}`));
+  }
+
+  // Display agent performance
+  if (context.agentPerformance.size > 0) {
+    console.log('\n📊 Agent Performance Metrics:');
+    console.log('-'.repeat(60));
+    context.agentPerformance.forEach((metrics, agent) => {
+      console.log(`\n   ${agent}:`);
+      console.log(`   - Success Rate: ${(metrics.successRate * 100).toFixed(1)}%`);
+      console.log(`   - Avg Execution Time: ${metrics.averageExecutionTime}s`);
+      if (metrics.commonErrors.length > 0) {
+        console.log(`   - Common Errors: ${metrics.commonErrors.join(', ')}`);
+      }
+    });
+  }
+
+  if (options.export) {
+    const filename = `context-${options.workItem}-${Date.now()}.json`;
+    const fs = await import('fs');
+    fs.writeFileSync(filename, JSON.stringify(context, null, 2));
+    console.log(`\n✅ Exported to ${filename}`);
+  }
+}
+
 async function main() {
   const args = process.argv.slice(2);
   
@@ -393,6 +618,12 @@ async function main() {
         break;
       case 'messages':
         await queryMessages(options);
+        break;
+      case 'trace':
+        await traceDecision(options);
+        break;
+      case 'context':
+        await showContext(options);
         break;
       default:
         console.error(`❌ Error: Unknown command "${options.command}"`);

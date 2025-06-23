@@ -13,6 +13,7 @@ export interface WorkItem {
   assigned_role: AgentRole | null;
   processing_started_at: string | null;
   processing_agent_id: string | null;
+  priority?: 'low' | 'medium' | 'high' | 'urgent';
   created_at: string;
   updated_at: string;
 }

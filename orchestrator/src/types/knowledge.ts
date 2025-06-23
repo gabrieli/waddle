@@ -2,10 +2,11 @@ import { AgentRole } from './index.js';
 
 export type PatternType = 'solution' | 'approach' | 'tool_usage' | 'error_handling' | 'optimization';
 export type ADRStatus = 'proposed' | 'accepted' | 'deprecated' | 'superseded';
-export type ReviewStatus = 'approved' | 'needs_changes' | 'rejected';
-export type ReviewType = 'code' | 'architecture' | 'security' | 'testing' | 'documentation';
-export type MessageType = 'request' | 'response' | 'notification' | 'query';
+export type ReviewStatus = 'approved' | 'needs_changes' | 'rejected' | 'pending' | 'needs_revision';
+export type ReviewType = 'code' | 'architecture' | 'security' | 'testing' | 'documentation' | 'performance';
+export type MessageType = 'request' | 'response' | 'notification' | 'query' | 'error' | 'status_update';
 export type Priority = 'low' | 'medium' | 'high' | 'urgent';
+export type MessagePriority = Priority;
 export type MessageStatus = 'pending' | 'delivered' | 'read' | 'processed';
 
 export interface Pattern {
@@ -80,6 +81,7 @@ export interface PatternFilter {
   min_effectiveness_score?: number;
   max_results?: number;
   include_embeddings?: boolean;
+  work_item_ids?: string[];
 }
 
 export interface PatternCreateParams {
@@ -121,4 +123,5 @@ export interface MessageCreateParams {
   content: string;
   work_item_id?: string;
   priority?: Priority;
+  metadata?: Record<string, any>;
 }
