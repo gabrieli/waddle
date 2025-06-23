@@ -85,7 +85,7 @@ router.post('/', (req: Request, res: Response) => {
     }
     
     // Validate message type
-    const validTypes: MessageType[] = ['request', 'response', 'notification', 'error', 'status_update'];
+    const validTypes: MessageType[] = ['question', 'insight', 'warning', 'handoff'];
     if (!validTypes.includes(message_type)) {
       return res.status(400).json({
         success: false,
@@ -174,6 +174,73 @@ router.get('/agent/:agent/unread', (req: Request, res: Response) => {
   }
 });
 
+// GET /api/messages/metrics - Get communication metrics
+router.get('/metrics', async (req: Request, res: Response) => {
+  try {
+    const { agent, period } = req.query;
+    const { messageService } = await import('../../services/messaging.js');
+    
+    // Get metrics for all agents or specific agent
+    const agents = agent ? [agent as string] : ['manager', 'architect', 'developer', 'reviewer', 'bug-buster'];
+    const metrics: Record<string, any> = {};
+    
+    for (const agentRole of agents) {
+      const stats = await messageService.getMessageStats(agentRole);
+      metrics[agentRole] = stats;
+    }
+    
+    // Add overall communication patterns
+    const db = await import('../../database/connection.js').then(m => m.getDatabase());
+    const communicationPatterns = db.prepare(`
+      SELECT 
+        from_agent,
+        to_agent,
+        message_type,
+        COUNT(*) as count,
+        AVG(CASE 
+          WHEN processed_at IS NOT NULL AND delivered_at IS NOT NULL 
+          THEN (julianday(processed_at) - julianday(delivered_at)) * 24 * 60 * 60 * 1000
+          ELSE NULL 
+        END) as avg_processing_time_ms
+      FROM agent_communications
+      WHERE created_at >= datetime('now', '-7 days')
+      GROUP BY from_agent, to_agent, message_type
+      ORDER BY count DESC
+    `).all();
+    
+    // Get dead letter queue health
+    const deadLetterHealth = db.prepare(`
+      SELECT 
+        to_agent,
+        COUNT(*) as dead_letter_count,
+        MAX(last_retry_at) as latest_failure
+      FROM agent_communications
+      WHERE is_dead_letter = 1
+      GROUP BY to_agent
+    `).all();
+    
+    res.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      agentMetrics: metrics,
+      communicationPatterns,
+      deadLetterHealth,
+      summary: {
+        totalAgents: agents.length,
+        totalMessages: Object.values(metrics).reduce((sum: number, m: any) => 
+          sum + m.pending + m.delivered + m.processed + m.failed, 0),
+        totalDeadLetters: Object.values(metrics).reduce((sum: number, m: any) => 
+          sum + m.deadLetter, 0)
+      }
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // POST /api/messages/broadcast - Send message to multiple agents
 router.post('/broadcast', (req: Request, res: Response) => {
   try {
@@ -224,6 +291,74 @@ router.post('/broadcast', (req: Request, res: Response) => {
       success: true,
       messages_sent: messageIds.length,
       message_ids: messageIds
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// GET /api/messages/dead-letter - Get dead letter queue messages
+router.get('/dead-letter', async (req: Request, res: Response) => {
+  try {
+    const { agent } = req.query;
+    const { messageService } = await import('../../services/messaging.js');
+    
+    const messages = await messageService.getDeadLetterMessages(agent as string | undefined);
+    
+    res.json({
+      success: true,
+      count: messages.length,
+      messages
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// POST /api/messages/:id/resurrect - Resurrect a message from dead letter queue
+router.post('/:id/resurrect', async (req: Request, res: Response) => {
+  try {
+    const { messageService } = await import('../../services/messaging.js');
+    
+    const success = await messageService.resurrectMessage(req.params.id);
+    
+    if (!success) {
+      return res.status(404).json({
+        success: false,
+        error: 'Message not found in dead letter queue'
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Message resurrected from dead letter queue'
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// DELETE /api/messages/dead-letter/cleanup - Clean up old dead letter messages
+router.delete('/dead-letter/cleanup', async (req: Request, res: Response) => {
+  try {
+    const { days } = req.query;
+    const { messageService } = await import('../../services/messaging.js');
+    
+    const daysOld = days ? parseInt(days as string, 10) : 30;
+    const deletedCount = await messageService.cleanupDeadLetterQueue(daysOld);
+    
+    res.json({
+      success: true,
+      message: `Cleaned up ${deletedCount} dead letter messages older than ${daysOld} days`
     });
   } catch (error: any) {
     res.status(500).json({

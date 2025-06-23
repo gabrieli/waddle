@@ -82,6 +82,11 @@ export interface OrchestratorConfig {
     contextEnabledPercent: number; // Percentage of requests to enable context (0-100)
     seed?: number; // For reproducible A/B testing
   };
+  // Learning system configuration
+  learningEnabled?: boolean;
+  patternExtractionInterval?: number; // How often to extract patterns (ms)
+  effectivenessScoringInterval?: number; // How often to update effectiveness scores (ms)
+  patternCleanupInterval?: number; // How often to cleanup patterns (ms)
 }
 
 export function loadConfig(): OrchestratorConfig {

@@ -7,9 +7,11 @@ import { runManagerAgent } from '../agents/manager.js';
 import { runSingleManagerAgent } from '../agents/manager-single.js';
 import { WorkItem } from '../types/index.js';
 import { createLogger, getLogger } from '../utils/logger.js';
+import { LearningWorker } from '../services/learning-worker.js';
 
 let isShuttingDown = false;
 let intervalId: NodeJS.Timeout | null = null;
+let learningWorker: LearningWorker | null = null;
 
 async function orchestratorLoop(config: OrchestratorConfig): Promise<void> {
   if (isShuttingDown) return;
@@ -85,6 +87,21 @@ async function main() {
     initializeDatabase(config.database);
     console.log('✅ Database connected');
     
+    // Initialize learning worker
+    const db = getDatabase();
+    if (config.learningEnabled !== false && db) {
+      learningWorker = new LearningWorker(db, {
+        enabled: true,
+        extractionInterval: config.patternExtractionInterval || 30 * 60 * 1000,
+        scoringInterval: config.effectivenessScoringInterval || 60 * 60 * 1000,
+        cleanupInterval: config.patternCleanupInterval || 24 * 60 * 60 * 1000
+      });
+      
+      await learningWorker.start();
+      console.log('✅ Learning worker started');
+      logger.info('Learning worker initialized and started');
+    }
+    
     // Set up graceful shutdown
     process.on('SIGINT', gracefulShutdown);
     process.on('SIGTERM', gracefulShutdown);
@@ -106,7 +123,7 @@ async function main() {
   }
 }
 
-function gracefulShutdown() {
+async function gracefulShutdown() {
   if (isShuttingDown) return;
   
   isShuttingDown = true;
@@ -114,6 +131,11 @@ function gracefulShutdown() {
   
   if (intervalId) {
     clearInterval(intervalId);
+  }
+  
+  if (learningWorker) {
+    await learningWorker.stop();
+    console.log('✅ Learning worker stopped');
   }
   
   closeDatabase();

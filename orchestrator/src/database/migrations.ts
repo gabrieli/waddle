@@ -133,6 +133,101 @@ export const migrations: Migration[] = [
       db.prepare('DROP TABLE IF EXISTS adrs').run();
       db.prepare('DROP TABLE IF EXISTS patterns').run();
     }
+  },
+  {
+    version: 3,
+    description: 'Update agent_communications message types and add dead letter queue fields',
+    up: (db) => {
+      // First, we need to handle existing data
+      // Update existing message types to map to new types
+      db.prepare(`
+        UPDATE agent_communications 
+        SET message_type = CASE 
+          WHEN message_type = 'query' THEN 'question'
+          WHEN message_type = 'notification' THEN 'insight'
+          WHEN message_type = 'error' THEN 'warning'
+          WHEN message_type = 'request' THEN 'question'
+          WHEN message_type = 'response' THEN 'insight'
+          WHEN message_type = 'status_update' THEN 'insight'
+          ELSE message_type
+        END
+      `).run();
+
+      // Add columns for dead letter queue functionality
+      const tableInfo = db.prepare('PRAGMA table_info(agent_communications)').all();
+      const columnNames = tableInfo.map((col: any) => col.name);
+      
+      if (!columnNames.includes('retry_count')) {
+        db.prepare('ALTER TABLE agent_communications ADD COLUMN retry_count INTEGER DEFAULT 0').run();
+      }
+      
+      if (!columnNames.includes('last_retry_at')) {
+        db.prepare('ALTER TABLE agent_communications ADD COLUMN last_retry_at TIMESTAMP').run();
+      }
+      
+      if (!columnNames.includes('error_message')) {
+        db.prepare('ALTER TABLE agent_communications ADD COLUMN error_message TEXT').run();
+      }
+      
+      if (!columnNames.includes('is_dead_letter')) {
+        db.prepare('ALTER TABLE agent_communications ADD COLUMN is_dead_letter BOOLEAN DEFAULT 0').run();
+      }
+      
+      // Create index for dead letter queue queries
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_agent_comms_dead_letter ON agent_communications(is_dead_letter, to_agent)').run();
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_agent_comms_retry ON agent_communications(retry_count, last_retry_at)').run();
+      
+      // Temporarily disable the constraint checking
+      db.prepare('PRAGMA foreign_keys = OFF').run();
+      
+      // Create new table with updated constraint
+      db.prepare(`
+        CREATE TABLE agent_communications_new (
+          id TEXT PRIMARY KEY,
+          from_agent TEXT NOT NULL,
+          to_agent TEXT NOT NULL,
+          message_type TEXT NOT NULL CHECK(message_type IN ('question', 'insight', 'warning', 'handoff')),
+          subject TEXT NOT NULL,
+          content TEXT NOT NULL,
+          work_item_id TEXT,
+          priority TEXT NOT NULL CHECK(priority IN ('low', 'medium', 'high', 'urgent')) DEFAULT 'medium',
+          status TEXT NOT NULL CHECK(status IN ('pending', 'delivered', 'read', 'processed', 'failed')) DEFAULT 'pending',
+          retry_count INTEGER DEFAULT 0,
+          last_retry_at TIMESTAMP,
+          error_message TEXT,
+          is_dead_letter BOOLEAN DEFAULT 0,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          delivered_at TIMESTAMP,
+          read_at TIMESTAMP,
+          processed_at TIMESTAMP,
+          FOREIGN KEY (work_item_id) REFERENCES work_items(id)
+        )
+      `).run();
+      
+      // Copy data from old table to new table
+      db.prepare(`
+        INSERT INTO agent_communications_new 
+        SELECT id, from_agent, to_agent, message_type, subject, content, work_item_id, 
+               priority, status, retry_count, last_retry_at, error_message, is_dead_letter,
+               created_at, delivered_at, read_at, processed_at
+        FROM agent_communications
+      `).run();
+      
+      // Drop old table
+      db.prepare('DROP TABLE agent_communications').run();
+      
+      // Rename new table
+      db.prepare('ALTER TABLE agent_communications_new RENAME TO agent_communications').run();
+      
+      // Recreate indexes
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_agent_comms_to_agent ON agent_communications(to_agent, status)').run();
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_agent_comms_work_item ON agent_communications(work_item_id)').run();
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_agent_comms_dead_letter ON agent_communications(is_dead_letter, to_agent)').run();
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_agent_comms_retry ON agent_communications(retry_count, last_retry_at)').run();
+      
+      // Re-enable foreign key constraints
+      db.prepare('PRAGMA foreign_keys = ON').run();
+    }
   }
 ];
 

@@ -4,10 +4,10 @@ export type PatternType = 'solution' | 'approach' | 'tool_usage' | 'error_handli
 export type ADRStatus = 'proposed' | 'accepted' | 'deprecated' | 'superseded';
 export type ReviewStatus = 'approved' | 'needs_changes' | 'rejected' | 'pending' | 'needs_revision';
 export type ReviewType = 'code' | 'architecture' | 'security' | 'testing' | 'documentation' | 'performance';
-export type MessageType = 'request' | 'response' | 'notification' | 'query' | 'error' | 'status_update';
+export type MessageType = 'question' | 'insight' | 'warning' | 'handoff';
 export type Priority = 'low' | 'medium' | 'high' | 'urgent';
 export type MessagePriority = Priority;
-export type MessageStatus = 'pending' | 'delivered' | 'read' | 'processed';
+export type MessageStatus = 'pending' | 'delivered' | 'read' | 'processed' | 'failed';
 
 export interface Pattern {
   id: string;
@@ -61,6 +61,10 @@ export interface AgentCommunication {
   work_item_id: string | null;
   priority: Priority;
   status: MessageStatus;
+  retry_count: number;
+  last_retry_at: string | null;
+  error_message: string | null;
+  is_dead_letter: boolean;
   created_at: string;
   delivered_at: string | null;
   read_at: string | null;
