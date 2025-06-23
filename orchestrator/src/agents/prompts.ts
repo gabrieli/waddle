@@ -30,6 +30,7 @@ RULES:
 - Stories in ready → assign_developer
 - Stories in review → assign_code_quality_reviewer or mark_complete
 - Epics in backlog → VALIDATE FIRST, then assign_architect OR reject_epic
+- Epics in in_progress with no child stories → assign_architect (retry analysis)
 - Epics with stories in ready/in_progress → move epic to in_progress and skip (focus on stories)
 - Epics where all stories are done → mark_complete
 - Completed work → mark_complete
