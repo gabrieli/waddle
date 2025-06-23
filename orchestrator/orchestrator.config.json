@@ -5,7 +5,7 @@
   "database": "./orchestrator.db",
   "parallelMode": true,
   "maxConcurrentManagers": 1,
-  "maxConcurrentDevelopers": 1,
+  "maxConcurrentDevelopers": 2,
   "maxBufferMB": 200,
   "agents": {
     "manager": { "model": "sonnet" },
@@ -21,5 +21,14 @@
     "includeTimestamp": true,
     "includeStackTrace": true,
     "maxFileSize": 100
+  },
+  "enableHistoricalContext": true,
+  "maxContextLength": 2000,
+  "contextLookbackHours": 168,
+  "contextCacheTTLMinutes": 15,
+  "abTesting": {
+    "enabled": false,
+    "contextEnabledPercent": 50,
+    "seed": 42
   }
 }

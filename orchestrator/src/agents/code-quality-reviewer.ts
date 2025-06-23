@@ -52,7 +52,7 @@ export async function runCodeQualityReviewerAgent(workItemId: string, config: Or
     }
     
     // Build and execute prompt
-    const prompt = buildCodeQualityReviewerPrompt(workItem, implementationDetails);
+    const prompt = await buildCodeQualityReviewerPrompt(workItem, implementationDetails);
     const result = await executeClaudeAgent('code-quality-reviewer', prompt, config, config.maxBufferMB);
     
     if (!result.success) {

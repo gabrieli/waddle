@@ -1,11 +1,12 @@
 import { WorkItem } from '../types/index.js';
 import { getWorkItem, updateWorkItemStatus, createWorkItem, generateId, addHistory, claimWorkItem, releaseWorkItem } from '../database/utils.js';
 import { executeClaudeAgent } from './claude-executor.js';
-import { buildArchitectPrompt } from './prompts.js';
+import { buildArchitectPrompt, PromptConfig } from './prompts.js';
 import { OrchestratorConfig } from '../orchestrator/config.js';
 import { parseAgentJsonResponse } from './json-parser.js';
 import { ResourceExhaustionSimulator } from './resource-exhaustion-simulator.js';
 import { BackoffStrategy } from './backoff-strategy.js';
+import { ContextManager } from './context-manager.js';
 import logger from '../utils/logger.js';
 
 export interface ArchitectAnalysisResult {
@@ -62,7 +63,21 @@ export async function runArchitectAgent(workItemId: string, config: Orchestrator
     updateWorkItemStatus(workItemId, 'in_progress', 'architect');
     
     // Build and execute prompt
-    const prompt = buildArchitectPrompt(epic);
+    const contextManager = new ContextManager({
+      maxHistoryItems: 10,
+      maxRelatedItems: 5,
+      lookbackHours: config.contextLookbackHours || 168,
+      enableCaching: true,
+      cacheTTLMinutes: config.contextCacheTTLMinutes || 15
+    });
+    
+    const promptConfig: PromptConfig = {
+      enableHistoricalContext: config.enableHistoricalContext !== false,
+      maxContextLength: config.maxContextLength || 2000,
+      contextManager
+    };
+    
+    const prompt = await buildArchitectPrompt(epic, promptConfig);
     const result = await executeClaudeAgent('architect', prompt, config, config.maxBufferMB);
     
     if (!result.success) {

@@ -15,7 +15,8 @@
     "dev": "tsx watch src/orchestrator/index.ts",
     "start:debug": "DEBUG=true tsx src/orchestrator/index.ts",
     "start:parallel": "PARALLEL_MODE=true tsx src/orchestrator/index.ts",
-    "start:single": "PARALLEL_MODE=false tsx src/orchestrator/index.ts"
+    "start:single": "PARALLEL_MODE=false tsx src/orchestrator/index.ts",
+    "demo:context-injection": "tsx scripts/demo-context-injection.ts"
   },
   "keywords": ["orchestrator", "autonomous", "development"],
   "author": "",

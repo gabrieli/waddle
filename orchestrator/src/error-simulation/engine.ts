@@ -1,5 +1,5 @@
 import { ErrorSimulationConfig, ErrorSimulationStats, ErrorType } from './types.js';
-import { logger } from '../utils/logger.js';
+import logger from '../utils/logger.js';
 import * as crypto from 'crypto';
 
 export class ErrorSimulationEngine {

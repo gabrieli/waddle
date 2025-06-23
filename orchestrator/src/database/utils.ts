@@ -4,8 +4,11 @@ import { getLogger } from '../utils/logger.js';
 
 const logger = getLogger();
 
+// Re-export getDatabase for other modules
+export { getDatabase };
+
 // Helper function to execute queries with logging
-function executeQuery<T>(
+export function executeQuery<T>(
   operation: string,
   query: string,
   params: any[],

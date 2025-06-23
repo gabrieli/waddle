@@ -39,7 +39,7 @@ async function testManagerDecision() {
     }
     
     // Build and execute prompt
-    const prompt = buildManagerPrompt(workItems, recentHistory, errorsStr);
+    const prompt = await buildManagerPrompt(workItems, recentHistory, errorsStr);
     console.log('\\nExecuting manager...');
     
     const result = await executeClaudeAgent('manager', prompt, config);

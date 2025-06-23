@@ -55,6 +55,18 @@ export function initializeDatabase(dbPath?: string): void {
     logger.debug('Creating bug_metadata table');
     database.exec(SCHEMA.bug_metadata);
     
+    logger.debug('Creating patterns table');
+    database.exec(SCHEMA.patterns);
+    
+    logger.debug('Creating adrs table');
+    database.exec(SCHEMA.adrs);
+    
+    logger.debug('Creating reviews table');
+    database.exec(SCHEMA.reviews);
+    
+    logger.debug('Creating agent_communications table');
+    database.exec(SCHEMA.agent_communications);
+    
     // Create indices
     logger.debug('Creating database indices');
     for (const index of SCHEMA.indices) {

@@ -46,7 +46,7 @@ export class BackoffStrategy {
           key,
           attempts,
           maxRetries: this.config.maxRetries,
-          error
+          error: error as Error
         });
         
         // Reset attempts for next time
@@ -70,7 +70,7 @@ export class BackoffStrategy {
         key,
         attempt: attempts + 1,
         delayMs: Math.round(delay),
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error : new Error(String(error))
       });
       
       // Update attempts

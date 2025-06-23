@@ -1,4 +1,18 @@
 import { WorkItem } from '../types/index.js';
+import { ContextManager } from './context-manager.js';
+import { RelevanceScorer } from './relevance-scorer.js';
+
+export interface PromptConfig {
+  enableHistoricalContext: boolean;
+  maxContextLength: number;
+  contextManager?: ContextManager;
+  relevanceScorer?: RelevanceScorer;
+}
+
+const DEFAULT_PROMPT_CONFIG: PromptConfig = {
+  enableHistoricalContext: true,
+  maxContextLength: 2000
+};
 
 export const MANAGER_PROMPT = `You are a Development Manager. Analyze these work items and decide next steps.
 
@@ -7,6 +21,8 @@ WORK ITEMS:
 
 RECENT ERRORS:
 {recentErrors}
+
+{historicalContext}
 
 PROJECT VISION: Waddle is an autonomous development system where AI agents collaborate as a cohesive team. Core objectives:
 - Agent autonomy and distributed processing
@@ -64,6 +80,8 @@ export const ARCHITECT_PROMPT = `You are a Technical Architect for an autonomous
 EPIC TO ANALYZE:
 {epic}
 
+{historicalContext}
+
 Your responsibilities:
 1. Understand the epic's goals and requirements
 2. Create a technical approach (brief, focused)
@@ -94,6 +112,8 @@ WORK ITEM TO IMPLEMENT:
 TECHNICAL CONTEXT:
 {technicalContext}
 
+{historicalContext}
+
 Your responsibilities:
 1. Implement the work item according to requirements
 2. For stories: Follow the technical approach defined by the architect
@@ -123,6 +143,8 @@ WORK TO REVIEW:
 
 IMPLEMENTATION DETAILS:
 {implementation}
+
+{historicalContext}
 
 Your responsibilities:
 1. Verify the implementation meets requirements
@@ -162,6 +184,8 @@ BUG TO INVESTIGATE:
 ERROR CONTEXT:
 {errorContext}
 
+{historicalContext}
+
 Your mission:
 1. Analyze the error logs and stack traces
 2. Create a minimal test case that reproduces the bug
@@ -194,56 +218,142 @@ Output Format:
   "blockers": ["If cannot reproduce, what's blocking"] // optional
 }`;
 
-export function buildManagerPrompt(workItems: WorkItem[], history: string, recentErrors?: string): string {
+export async function buildManagerPrompt(
+  workItems: WorkItem[], 
+  history: string, 
+  recentErrors?: string,
+  config: PromptConfig = DEFAULT_PROMPT_CONFIG
+): Promise<string> {
   const workItemsStr = workItems.map(item => 
     `- ${item.type.toUpperCase()} ${item.id}: "${item.title}" [${item.status}]${item.assigned_role ? ` (assigned: ${item.assigned_role})` : ''}`
   ).join('\n');
   
+  let historicalContext = '';
+  if (config.enableHistoricalContext && config.contextManager) {
+    try {
+      historicalContext = await config.contextManager.getContextForAgent('manager');
+      if (historicalContext && historicalContext.length > config.maxContextLength) {
+        historicalContext = historicalContext.substring(0, config.maxContextLength) + '\n[Context truncated]';
+      }
+    } catch (error) {
+      console.warn('Failed to get historical context for manager:', error);
+    }
+  }
+  
   return MANAGER_PROMPT
     .replace('{workItems}', workItemsStr)
     .replace('{history}', history)
-    .replace('{recentErrors}', recentErrors || 'No recent errors');
+    .replace('{recentErrors}', recentErrors || 'No recent errors')
+    .replace('{historicalContext}', historicalContext ? `\nHISTORICAL CONTEXT:\n${historicalContext}` : '');
 }
 
-export function buildArchitectPrompt(epic: WorkItem): string {
+export async function buildArchitectPrompt(
+  epic: WorkItem,
+  config: PromptConfig = DEFAULT_PROMPT_CONFIG
+): Promise<string> {
   const epicStr = `ID: ${epic.id}
 Title: ${epic.title}
 Description: ${epic.description || 'No description'}
 Status: ${epic.status}`;
   
-  return ARCHITECT_PROMPT.replace('{epic}', epicStr);
+  let historicalContext = '';
+  if (config.enableHistoricalContext && config.contextManager) {
+    try {
+      historicalContext = await config.contextManager.getContextForAgent('architect', epic.id);
+      if (historicalContext && historicalContext.length > config.maxContextLength) {
+        historicalContext = historicalContext.substring(0, config.maxContextLength) + '\n[Context truncated]';
+      }
+    } catch (error) {
+      console.warn('Failed to get historical context for architect:', error);
+    }
+  }
+  
+  return ARCHITECT_PROMPT
+    .replace('{epic}', epicStr)
+    .replace('{historicalContext}', historicalContext ? `\nHISTORICAL CONTEXT:\n${historicalContext}` : '');
 }
 
-export function buildDeveloperPrompt(workItem: WorkItem, context: string): string {
+export async function buildDeveloperPrompt(
+  workItem: WorkItem, 
+  context: string,
+  config: PromptConfig = DEFAULT_PROMPT_CONFIG
+): Promise<string> {
   const workItemStr = `ID: ${workItem.id}
 Title: ${workItem.title}
 Type: ${workItem.type}
 Description: ${workItem.description || 'No description'}
 Status: ${workItem.status}`;
   
+  let historicalContext = '';
+  if (config.enableHistoricalContext && config.contextManager) {
+    try {
+      historicalContext = await config.contextManager.getContextForAgent('developer', workItem.id);
+      if (historicalContext && historicalContext.length > config.maxContextLength) {
+        historicalContext = historicalContext.substring(0, config.maxContextLength) + '\n[Context truncated]';
+      }
+    } catch (error) {
+      console.warn('Failed to get historical context for developer:', error);
+    }
+  }
+  
   return DEVELOPER_PROMPT
     .replace('{workItem}', workItemStr)
-    .replace('{technicalContext}', context);
+    .replace('{technicalContext}', context)
+    .replace('{historicalContext}', historicalContext ? `\nHISTORICAL CONTEXT:\n${historicalContext}` : '');
 }
 
-export function buildCodeQualityReviewerPrompt(workItem: WorkItem, implementation: string): string {
+export async function buildCodeQualityReviewerPrompt(
+  workItem: WorkItem, 
+  implementation: string,
+  config: PromptConfig = DEFAULT_PROMPT_CONFIG
+): Promise<string> {
   const itemStr = `ID: ${workItem.id}
 Title: ${workItem.title}
 Description: ${workItem.description || 'No description'}
 Type: ${workItem.type}`;
   
+  let historicalContext = '';
+  if (config.enableHistoricalContext && config.contextManager) {
+    try {
+      historicalContext = await config.contextManager.getContextForAgent('reviewer', workItem.id);
+      if (historicalContext && historicalContext.length > config.maxContextLength) {
+        historicalContext = historicalContext.substring(0, config.maxContextLength) + '\n[Context truncated]';
+      }
+    } catch (error) {
+      console.warn('Failed to get historical context for reviewer:', error);
+    }
+  }
+  
   return CODE_QUALITY_REVIEWER_PROMPT
     .replace('{workItem}', itemStr)
-    .replace('{implementation}', implementation);
+    .replace('{implementation}', implementation)
+    .replace('{historicalContext}', historicalContext ? `\nHISTORICAL CONTEXT:\n${historicalContext}` : '');
 }
 
-export function buildBugBusterPrompt(bug: WorkItem, errorContext: string): string {
+export async function buildBugBusterPrompt(
+  bug: WorkItem, 
+  errorContext: string,
+  config: PromptConfig = DEFAULT_PROMPT_CONFIG
+): Promise<string> {
   const bugStr = `ID: ${bug.id}
 Title: ${bug.title}
 Description: ${bug.description || 'No description'}
 Status: ${bug.status}`;
   
+  let historicalContext = '';
+  if (config.enableHistoricalContext && config.contextManager) {
+    try {
+      historicalContext = await config.contextManager.getContextForAgent('bug-buster', bug.id);
+      if (historicalContext && historicalContext.length > config.maxContextLength) {
+        historicalContext = historicalContext.substring(0, config.maxContextLength) + '\n[Context truncated]';
+      }
+    } catch (error) {
+      console.warn('Failed to get historical context for bug-buster:', error);
+    }
+  }
+  
   return BUG_BUSTER_PROMPT
     .replace('{bug}', bugStr)
-    .replace('{errorContext}', errorContext);
+    .replace('{errorContext}', errorContext)
+    .replace('{historicalContext}', historicalContext ? `\nHISTORICAL CONTEXT:\n${historicalContext}` : '');
 }

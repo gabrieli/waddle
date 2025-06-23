@@ -71,6 +71,17 @@ export interface OrchestratorConfig {
       errorTypes: ('timeout' | 'parse' | 'api')[];
     };
   };
+  // Historical context configuration
+  enableHistoricalContext?: boolean;
+  maxContextLength?: number;
+  contextLookbackHours?: number;
+  contextCacheTTLMinutes?: number;
+  // A/B testing configuration
+  abTesting?: {
+    enabled: boolean;
+    contextEnabledPercent: number; // Percentage of requests to enable context (0-100)
+    seed?: number; // For reproducible A/B testing
+  };
 }
 
 export function loadConfig(): OrchestratorConfig {

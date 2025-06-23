@@ -43,7 +43,7 @@ export async function runBugBusterAgent(workItemId: string, config: Orchestrator
     }).join('\n---\n');
     
     // Build and execute prompt
-    const prompt = buildBugBusterPrompt(bug, contextStr);
+    const prompt = await buildBugBusterPrompt(bug, contextStr);
     const result = await executeClaudeAgent('bug-buster', prompt, config, config.maxBufferMB);
     
     // Keep the lock alive during processing

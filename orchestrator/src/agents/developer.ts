@@ -75,7 +75,7 @@ IMPORTANT: You must ensure all temporary artifacts are removed before marking as
     }
     
     // Build and execute prompt
-    const prompt = buildDeveloperPrompt(workItem, technicalContext);
+    const prompt = await buildDeveloperPrompt(workItem, technicalContext);
     const result = await executeClaudeAgent('developer', prompt, config, config.maxBufferMB);
     
     if (!result.success) {

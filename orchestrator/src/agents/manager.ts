@@ -1,12 +1,13 @@
 import { WorkItem, ManagerDecision } from '../types/index.js';
 import { getAllWorkItems, getAvailableWorkItems, updateWorkItemStatus, createWorkItem, generateId, addHistory, getWorkItemHistory, getWorkItem } from '../database/utils.js';
 import { executeClaudeAgent } from './claude-executor.js';
-import { buildManagerPrompt } from './prompts.js';
+import { buildManagerPrompt, PromptConfig } from './prompts.js';
 import { OrchestratorConfig } from '../orchestrator/config.js';
 import { runArchitectAgent } from './architect.js';
 import { runDeveloperAgent } from './developer.js';
 import { runCodeQualityReviewerAgent } from './code-quality-reviewer.js';
 import { parseAgentJsonResponse } from './json-parser.js';
+import { ContextManager } from './context-manager.js';
 
 export interface ManagerDecisionResult {
   decisions: Array<{
@@ -51,8 +52,43 @@ export async function runManagerAgent(config: OrchestratorConfig): Promise<void>
       : 'No recent errors';
     
     // Build and execute prompt
-    const prompt = buildManagerPrompt(workItems, recentHistory, errorsStr);
+    const { getABTestingManager } = await import('./ab-testing.js');
+    const abTestManager = getABTestingManager(config);
+    
+    // Determine if we should use context based on A/B test
+    const abTestResult = abTestManager.shouldEnableContext('manager-decision', 'manager');
+    
+    const contextManager = new ContextManager({
+      maxHistoryItems: 15,
+      maxRelatedItems: 8,
+      enableCaching: true
+    });
+    
+    const promptConfig: PromptConfig = {
+      enableHistoricalContext: abTestResult.enableContext,
+      maxContextLength: config.maxContextLength || 2000,
+      contextManager
+    };
+    
+    const startTime = Date.now();
+    const prompt = await buildManagerPrompt(workItems, recentHistory, errorsStr, promptConfig);
+    const contextSize = prompt.includes('HISTORICAL CONTEXT:') 
+      ? prompt.indexOf('PROJECT VISION:') - prompt.indexOf('HISTORICAL CONTEXT:') 
+      : 0;
+    
     const result = await executeClaudeAgent('manager', prompt, config, config.maxBufferMB);
+    
+    // Record A/B test metrics
+    abTestManager.recordMetrics({
+      variant: abTestResult.variant,
+      workItemId: 'manager-decision',
+      agentType: 'manager',
+      executionTimeMs: Date.now() - startTime,
+      success: result.success,
+      errorType: result.error ? 'execution_error' : undefined,
+      contextSize,
+      timestamp: new Date()
+    });
     
     if (!result.success) {
       console.error('❌ Manager agent failed:', result.error);
