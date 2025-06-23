@@ -1,8 +1,13 @@
 import { WorkItem } from '../types/index.js';
 import { getWorkItem, updateWorkItemStatus, createWorkItem, generateId, addHistory, claimWorkItem, releaseWorkItem } from '../database/utils.js';
 import { executeClaudeAgent } from './claude-executor.js';
-import { buildArchitectPrompt } from './prompts.js';
+import { buildArchitectPrompt, PromptConfig } from './prompts.js';
 import { OrchestratorConfig } from '../orchestrator/config.js';
+import { parseAgentJsonResponse } from './json-parser.js';
+import { ResourceExhaustionSimulator } from './resource-exhaustion-simulator.js';
+import { BackoffStrategy } from './backoff-strategy.js';
+import { ContextManager } from './context-manager.js';
+import logger from '../utils/logger.js';
 
 export interface ArchitectAnalysisResult {
   technicalApproach: string;
@@ -19,6 +24,22 @@ export interface ArchitectAnalysisResult {
 export async function runArchitectAgent(workItemId: string, config: OrchestratorConfig): Promise<void> {
   const agentId = `architect-${Date.now()}`;
   console.log(`\n🏗️  Architect Agent: Analyzing epic ${workItemId}...`);
+  
+  // Initialize resource exhaustion simulator if configured
+  let resourceSimulator: ResourceExhaustionSimulator | undefined;
+  if (config.resourceExhaustion) {
+    resourceSimulator = new ResourceExhaustionSimulator(config.resourceExhaustion);
+    console.log('🔬 Resource exhaustion simulation enabled');
+  }
+  
+  // Initialize backoff strategy
+  const backoffStrategy = new BackoffStrategy({
+    initialDelayMs: 2000,
+    maxDelayMs: 120000,
+    multiplier: 2,
+    maxRetries: 5,
+    jitterMs: 500
+  });
   
   try {
     // Try to claim the work item
@@ -42,8 +63,22 @@ export async function runArchitectAgent(workItemId: string, config: Orchestrator
     updateWorkItemStatus(workItemId, 'in_progress', 'architect');
     
     // Build and execute prompt
-    const prompt = buildArchitectPrompt(epic);
-    const result = await executeClaudeAgent('architect', prompt, config);
+    const contextManager = new ContextManager({
+      maxHistoryItems: 10,
+      maxRelatedItems: 5,
+      lookbackHours: config.contextLookbackHours || 168,
+      enableCaching: true,
+      cacheTTLMinutes: config.contextCacheTTLMinutes || 15
+    });
+    
+    const promptConfig: PromptConfig = {
+      enableHistoricalContext: config.enableHistoricalContext !== false,
+      maxContextLength: config.maxContextLength || 2000,
+      contextManager
+    };
+    
+    const prompt = await buildArchitectPrompt(epic, promptConfig);
+    const result = await executeClaudeAgent('architect', prompt, config, config.maxBufferMB);
     
     if (!result.success) {
       console.error('❌ Architect agent failed:', result.error);
@@ -53,25 +88,19 @@ export async function runArchitectAgent(workItemId: string, config: Orchestrator
     }
     
     // Parse analysis result
-    let analysis: ArchitectAnalysisResult;
-    try {
-      // Extract JSON from the output (Claude might include explanation text)
-      const jsonMatch = result.output.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        throw new Error('No JSON found in response');
-      }
-      analysis = JSON.parse(jsonMatch[0]);
-    } catch (e) {
-      console.error('❌ Failed to parse architect analysis:', e);
-      console.log('Raw output:', result.output);
+    const parseResult = parseAgentJsonResponse<ArchitectAnalysisResult>(result.output, 'architect');
+    
+    if (!parseResult.success) {
+      console.error('❌ Failed to parse architect analysis:', parseResult.error);
+      console.log('Raw output:', parseResult.rawOutput);
       
       // Record detailed error for self-healing
       const errorDetails = {
         errorType: 'JSON_PARSE_ERROR',
-        errorMessage: e instanceof Error ? e.message : String(e),
+        errorMessage: parseResult.error || 'Unknown parsing error',
         agentType: 'architect',
         expectedFormat: 'ArchitectAnalysisResult JSON',
-        rawOutput: result.output,
+        rawOutput: parseResult.rawOutput,
         workItemId: workItemId,
         epicTitle: epic.title,
         timestamp: new Date().toISOString()
@@ -81,6 +110,31 @@ export async function runArchitectAgent(workItemId: string, config: Orchestrator
       addHistory(workItemId, 'agent_output', 'Failed to parse architect analysis - error recorded for investigation', 'architect');
       
       // Update status back to backlog so manager can handle
+      updateWorkItemStatus(workItemId, 'backlog', 'architect');
+      releaseWorkItem(workItemId, agentId);
+      return;
+    }
+    
+    const analysis = parseResult.data!;
+    
+    // Validate the parsed object has expected structure
+    if (!analysis.technicalApproach || !Array.isArray(analysis.stories)) {
+      console.error('❌ Invalid JSON structure: missing required fields');
+      
+      const errorDetails = {
+        errorType: 'JSON_STRUCTURE_ERROR',
+        errorMessage: 'Invalid JSON structure: missing required fields',
+        agentType: 'architect',
+        expectedFormat: 'ArchitectAnalysisResult with technicalApproach and stories array',
+        rawOutput: parseResult.rawOutput,
+        parsedData: JSON.stringify(analysis),
+        workItemId: workItemId,
+        epicTitle: epic.title,
+        timestamp: new Date().toISOString()
+      };
+      
+      addHistory(workItemId, 'error', JSON.stringify(errorDetails), 'architect');
+      addHistory(workItemId, 'agent_output', 'Invalid architect analysis structure - error recorded for investigation', 'architect');
       updateWorkItemStatus(workItemId, 'backlog', 'architect');
       releaseWorkItem(workItemId, agentId);
       return;

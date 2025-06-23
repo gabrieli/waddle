@@ -1,11 +1,13 @@
 import { WorkItem, ManagerDecision } from '../types/index.js';
 import { getAllWorkItems, getAvailableWorkItems, updateWorkItemStatus, createWorkItem, generateId, addHistory, getWorkItemHistory, getWorkItem } from '../database/utils.js';
 import { executeClaudeAgent } from './claude-executor.js';
-import { buildManagerPrompt } from './prompts.js';
+import { buildManagerPrompt, PromptConfig } from './prompts.js';
 import { OrchestratorConfig } from '../orchestrator/config.js';
 import { runArchitectAgent } from './architect.js';
 import { runDeveloperAgent } from './developer.js';
 import { runCodeQualityReviewerAgent } from './code-quality-reviewer.js';
+import { parseAgentJsonResponse } from './json-parser.js';
+import { ContextManager } from './context-manager.js';
 
 export interface ManagerDecisionResult {
   decisions: Array<{
@@ -50,8 +52,43 @@ export async function runManagerAgent(config: OrchestratorConfig): Promise<void>
       : 'No recent errors';
     
     // Build and execute prompt
-    const prompt = buildManagerPrompt(workItems, recentHistory, errorsStr);
-    const result = await executeClaudeAgent('manager', prompt, config);
+    const { getABTestingManager } = await import('./ab-testing.js');
+    const abTestManager = getABTestingManager(config);
+    
+    // Determine if we should use context based on A/B test
+    const abTestResult = abTestManager.shouldEnableContext('manager-decision', 'manager');
+    
+    const contextManager = new ContextManager({
+      maxHistoryItems: 15,
+      maxRelatedItems: 8,
+      enableCaching: true
+    });
+    
+    const promptConfig: PromptConfig = {
+      enableHistoricalContext: abTestResult.enableContext,
+      maxContextLength: config.maxContextLength || 2000,
+      contextManager
+    };
+    
+    const startTime = Date.now();
+    const prompt = await buildManagerPrompt(workItems, recentHistory, errorsStr, promptConfig);
+    const contextSize = prompt.includes('HISTORICAL CONTEXT:') 
+      ? prompt.indexOf('PROJECT VISION:') - prompt.indexOf('HISTORICAL CONTEXT:') 
+      : 0;
+    
+    const result = await executeClaudeAgent('manager', prompt, config, config.maxBufferMB);
+    
+    // Record A/B test metrics
+    abTestManager.recordMetrics({
+      variant: abTestResult.variant,
+      workItemId: 'manager-decision',
+      agentType: 'manager',
+      executionTimeMs: Date.now() - startTime,
+      success: result.success,
+      errorType: result.error ? 'execution_error' : undefined,
+      contextSize,
+      timestamp: new Date()
+    });
     
     if (!result.success) {
       console.error('❌ Manager agent failed:', result.error);
@@ -59,19 +96,39 @@ export async function runManagerAgent(config: OrchestratorConfig): Promise<void>
     }
     
     // Parse decision
-    let decision: ManagerDecisionResult;
-    try {
-      // Extract JSON from the output (Claude might include explanation text)
-      const jsonMatch = result.output.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        throw new Error('No JSON found in response');
-      }
-      decision = JSON.parse(jsonMatch[0]);
-    } catch (e) {
-      console.error('❌ Failed to parse manager decision:', e);
-      console.log('Raw output:', result.output);
+    const parseResult = parseAgentJsonResponse<ManagerDecisionResult>(result.output, 'manager');
+    
+    if (!parseResult.success) {
+      console.error('❌ Failed to parse manager decision:', parseResult.error);
+      console.log('Raw output:', parseResult.rawOutput);
+      
+      // Record error for self-healing
+      const errorDetails = {
+        errorType: 'JSON_PARSE_ERROR',
+        errorMessage: parseResult.error || 'Unknown parsing error',
+        agentType: 'manager',
+        expectedFormat: 'ManagerDecisionResult JSON',
+        rawOutput: parseResult.rawOutput,
+        workItemCount: workItems.length,
+        timestamp: new Date().toISOString()
+      };
+      
+      // Create a special work item to track manager errors
+      const errorId = generateId('BUG');
+      createWorkItem(
+        errorId,
+        'bug',
+        'Manager agent JSON parsing error',
+        `The manager agent failed to parse JSON response.\n\nError: ${errorDetails.errorMessage}\n\nThis prevents the manager from making decisions and orchestrating work.`,
+        null,
+        'backlog'
+      );
+      addHistory(errorId, 'error', JSON.stringify(errorDetails), 'system');
+      
       return;
     }
+    
+    const decision = parseResult.data!;
     
     // Execute decisions
     console.log(`\n📊 Processing ${decision.decisions.length} decisions...`);
@@ -144,8 +201,19 @@ async function executeDecision(decision: any, config: OrchestratorConfig): Promi
         
       case 'assign_developer':
         console.log(`   💻 Assigning to developer`);
-        addHistory(workItemId, 'decision', 'Assigned to developer', 'manager');
-        await runDeveloperAgent(workItemId, config);
+        
+        // Check developer concurrency limit
+        const { canAssignDeveloper } = await import('../database/utils.js');
+        const maxDevelopers = config.maxConcurrentDevelopers || 1;
+        
+        if (!canAssignDeveloper(maxDevelopers)) {
+          console.log(`   ⚠️  Developer limit reached (max: ${maxDevelopers}). Skipping assignment.`);
+          addHistory(workItemId, 'decision', `Developer limit reached (max: ${maxDevelopers}), will retry later`, 'manager');
+          // Don't change status - leave it in ready so it can be picked up later
+        } else {
+          addHistory(workItemId, 'decision', 'Assigned to developer', 'manager');
+          await runDeveloperAgent(workItemId, config);
+        }
         break;
         
       case 'assign_code_quality_reviewer':
@@ -159,6 +227,13 @@ async function executeDecision(decision: any, config: OrchestratorConfig): Promi
         addHistory(workItemId, 'decision', 'Assigned to bug buster', 'manager');
         const { runBugBusterAgent } = await import('./bug-buster.js');
         await runBugBusterAgent(workItemId, config);
+        break;
+        
+      case 'reject_epic':
+        console.log(`   ❌ Rejecting epic: ${reason}`);
+        updateWorkItemStatus(workItemId, 'done', 'manager');
+        addHistory(workItemId, 'decision', `Epic rejected: ${reason}. Not aligned with Waddle vision.`, 'manager');
+        console.log(`   ✅ Epic marked as done (rejected)`);
         break;
         
       case 'wait':

@@ -1,4 +1,18 @@
 import { WorkItem } from '../types/index.js';
+import { ContextManager } from './context-manager.js';
+import { RelevanceScorer } from './relevance-scorer.js';
+
+export interface PromptConfig {
+  enableHistoricalContext: boolean;
+  maxContextLength: number;
+  contextManager?: ContextManager;
+  relevanceScorer?: RelevanceScorer;
+}
+
+const DEFAULT_PROMPT_CONFIG: PromptConfig = {
+  enableHistoricalContext: true,
+  maxContextLength: 2000
+};
 
 export const MANAGER_PROMPT = `You are a Development Manager. Analyze these work items and decide next steps.
 
@@ -8,12 +22,31 @@ WORK ITEMS:
 RECENT ERRORS:
 {recentErrors}
 
+{historicalContext}
+
+PROJECT VISION: Waddle is an autonomous development system where AI agents collaborate as a cohesive team. Core objectives:
+- Agent autonomy and distributed processing
+- Role-based specialization (Manager, Architect, Developer, Reviewer)
+- Scalable parallel work processing
+- Quality assurance through multi-stage reviews
+- Continuous improvement and learning
+
+EPIC QUALITY VALIDATION:
+Before assigning epics to architect, validate they meet these criteria:
+- Must contribute to Waddle's autonomous development capabilities
+- Must improve system functionality, scalability, or quality
+- Must have clear business value for the Waddle platform
+- REJECT if title contains "Test", "Demo", "Example", "Simulation" without clear product value
+- REJECT if focused purely on testing/debugging rather than product improvement
+- REJECT if not aligned with project vision and objectives
+
 RULES:
 - Bugs in backlog → assign_bug_buster (to investigate and reproduce)
 - Bugs in ready → assign_developer (already investigated)
 - Stories in ready → assign_developer
 - Stories in review → assign_code_quality_reviewer or mark_complete
-- Epics in backlog → assign_architect
+- Epics in backlog → VALIDATE FIRST, then assign_architect OR reject_epic
+- Epics in in_progress with no child stories → assign_architect (retry analysis)
 - Epics with stories in ready/in_progress → move epic to in_progress and skip (focus on stories)
 - Epics where all stories are done → mark_complete
 - Completed work → mark_complete
@@ -31,7 +64,7 @@ Return ONLY valid JSON:
 {
   "decisions": [{
     "workItemId": "ID",
-    "action": "assign_architect|assign_developer|assign_bug_buster|assign_code_quality_reviewer|mark_complete|wait",
+    "action": "assign_architect|assign_developer|assign_bug_buster|assign_code_quality_reviewer|mark_complete|reject_epic|wait",
     "reason": "brief reason"
   }],
   "createNewItems": [{
@@ -47,26 +80,47 @@ export const ARCHITECT_PROMPT = `You are a Technical Architect for an autonomous
 EPIC TO ANALYZE:
 {epic}
 
+{historicalContext}
+
+SIMPLICITY PRINCIPLES:
+- Start with the simplest solution that achieves the objectives
+- Leverage existing tools and infrastructure (e.g., git worktrees instead of complex coordination)
+- Avoid creating new agents, tables, or systems unless absolutely necessary
+- Think "What would a 10x developer do with basic tools?"
+- Prefer conventions over complex mechanisms (e.g., "depends_on: STORY-XXX" in descriptions)
+- If a solution requires more than 3 new components, it's probably too complex
+- Ask yourself: "Can this be solved with existing git/shell/filesystem features?"
+
+Example of good thinking:
+❌ Complex: Create 4 new agents, dependency graphs, and coordination systems for parallel work
+✅ Simple: Use git worktrees and text-based dependencies in story descriptions
+
+STRICT DATA RULES:
+- NEVER design scripts that add test/demo data to the main database tables
+- NEVER propose creating seed data, test data, or example entries unless it's essential for the core feature
+- Only create data that is directly required by the business functionality
+- Test data should only exist in test files, never in production scripts
+
 Your responsibilities:
 1. Understand the epic's goals and requirements
-2. Create a technical approach (brief, focused)
+2. Create a SIMPLE technical approach that achieves the objectives
 3. Break down into 3-5 user stories with clear acceptance criteria
-4. Define implementation order and dependencies
+4. Define implementation order and dependencies (use "depends_on: STORY-XXX" format)
 5. Identify technical risks or challenges
 
 Output Format:
 {
-  "technicalApproach": "Brief technical approach",
+  "technicalApproach": "Brief SIMPLE technical approach using existing tools",
   "stories": [
     {
       "title": "As a..., I want..., so that...",
-      "description": "Detailed description",
+      "description": "Detailed description. Include 'depends_on: STORY-XXX' if this depends on another story",
       "acceptanceCriteria": ["criteria1", "criteria2"],
       "estimatedEffort": "small|medium|large"
     }
   ],
   "risks": ["risk1", "risk2"],
-  "dependencies": ["dep1", "dep2"]
+  "dependencies": ["External dependencies like APIs or libraries"]
 }`;
 
 export const DEVELOPER_PROMPT = `You are a Developer in an autonomous development system. Your role is to implement user stories and fix bugs based on technical context.
@@ -76,6 +130,15 @@ WORK ITEM TO IMPLEMENT:
 
 TECHNICAL CONTEXT:
 {technicalContext}
+
+{historicalContext}
+
+STRICT DATA RULES:
+- NEVER create scripts that add test/demo data to the main database tables
+- NEVER directly insert test data into production tables
+- Only create data that is essential for the core feature functionality
+- Test data belongs ONLY in test files, never in production code
+- If data insertion is needed for the feature, it must be through proper APIs/functions
 
 Your responsibilities:
 1. Implement the work item according to requirements
@@ -107,6 +170,8 @@ WORK TO REVIEW:
 IMPLEMENTATION DETAILS:
 {implementation}
 
+{historicalContext}
+
 Your responsibilities:
 1. Verify the implementation meets requirements
 2. Check code quality and best practices
@@ -122,6 +187,8 @@ Review Checklist:
 - Are there any security concerns?
 - For bugs: Are regression tests included?
 - For bugs: Were all temporary artifacts removed?
+- CRITICAL: Verify NO scripts create test/demo data in main database tables
+- CRITICAL: Ensure test data exists only in test files, not production code
 
 Output Format:
 {
@@ -144,6 +211,8 @@ BUG TO INVESTIGATE:
 
 ERROR CONTEXT:
 {errorContext}
+
+{historicalContext}
 
 Your mission:
 1. Analyze the error logs and stack traces
@@ -177,56 +246,142 @@ Output Format:
   "blockers": ["If cannot reproduce, what's blocking"] // optional
 }`;
 
-export function buildManagerPrompt(workItems: WorkItem[], history: string, recentErrors?: string): string {
+export async function buildManagerPrompt(
+  workItems: WorkItem[], 
+  history: string, 
+  recentErrors?: string,
+  config: PromptConfig = DEFAULT_PROMPT_CONFIG
+): Promise<string> {
   const workItemsStr = workItems.map(item => 
     `- ${item.type.toUpperCase()} ${item.id}: "${item.title}" [${item.status}]${item.assigned_role ? ` (assigned: ${item.assigned_role})` : ''}`
   ).join('\n');
   
+  let historicalContext = '';
+  if (config.enableHistoricalContext && config.contextManager) {
+    try {
+      historicalContext = await config.contextManager.getContextForAgent('manager');
+      if (historicalContext && historicalContext.length > config.maxContextLength) {
+        historicalContext = historicalContext.substring(0, config.maxContextLength) + '\n[Context truncated]';
+      }
+    } catch (error) {
+      console.warn('Failed to get historical context for manager:', error);
+    }
+  }
+  
   return MANAGER_PROMPT
     .replace('{workItems}', workItemsStr)
     .replace('{history}', history)
-    .replace('{recentErrors}', recentErrors || 'No recent errors');
+    .replace('{recentErrors}', recentErrors || 'No recent errors')
+    .replace('{historicalContext}', historicalContext ? `\nHISTORICAL CONTEXT:\n${historicalContext}` : '');
 }
 
-export function buildArchitectPrompt(epic: WorkItem): string {
+export async function buildArchitectPrompt(
+  epic: WorkItem,
+  config: PromptConfig = DEFAULT_PROMPT_CONFIG
+): Promise<string> {
   const epicStr = `ID: ${epic.id}
 Title: ${epic.title}
 Description: ${epic.description || 'No description'}
 Status: ${epic.status}`;
   
-  return ARCHITECT_PROMPT.replace('{epic}', epicStr);
+  let historicalContext = '';
+  if (config.enableHistoricalContext && config.contextManager) {
+    try {
+      historicalContext = await config.contextManager.getContextForAgent('architect', epic.id);
+      if (historicalContext && historicalContext.length > config.maxContextLength) {
+        historicalContext = historicalContext.substring(0, config.maxContextLength) + '\n[Context truncated]';
+      }
+    } catch (error) {
+      console.warn('Failed to get historical context for architect:', error);
+    }
+  }
+  
+  return ARCHITECT_PROMPT
+    .replace('{epic}', epicStr)
+    .replace('{historicalContext}', historicalContext ? `\nHISTORICAL CONTEXT:\n${historicalContext}` : '');
 }
 
-export function buildDeveloperPrompt(workItem: WorkItem, context: string): string {
+export async function buildDeveloperPrompt(
+  workItem: WorkItem, 
+  context: string,
+  config: PromptConfig = DEFAULT_PROMPT_CONFIG
+): Promise<string> {
   const workItemStr = `ID: ${workItem.id}
 Title: ${workItem.title}
 Type: ${workItem.type}
 Description: ${workItem.description || 'No description'}
 Status: ${workItem.status}`;
   
+  let historicalContext = '';
+  if (config.enableHistoricalContext && config.contextManager) {
+    try {
+      historicalContext = await config.contextManager.getContextForAgent('developer', workItem.id);
+      if (historicalContext && historicalContext.length > config.maxContextLength) {
+        historicalContext = historicalContext.substring(0, config.maxContextLength) + '\n[Context truncated]';
+      }
+    } catch (error) {
+      console.warn('Failed to get historical context for developer:', error);
+    }
+  }
+  
   return DEVELOPER_PROMPT
     .replace('{workItem}', workItemStr)
-    .replace('{technicalContext}', context);
+    .replace('{technicalContext}', context)
+    .replace('{historicalContext}', historicalContext ? `\nHISTORICAL CONTEXT:\n${historicalContext}` : '');
 }
 
-export function buildCodeQualityReviewerPrompt(workItem: WorkItem, implementation: string): string {
+export async function buildCodeQualityReviewerPrompt(
+  workItem: WorkItem, 
+  implementation: string,
+  config: PromptConfig = DEFAULT_PROMPT_CONFIG
+): Promise<string> {
   const itemStr = `ID: ${workItem.id}
 Title: ${workItem.title}
 Description: ${workItem.description || 'No description'}
 Type: ${workItem.type}`;
   
+  let historicalContext = '';
+  if (config.enableHistoricalContext && config.contextManager) {
+    try {
+      historicalContext = await config.contextManager.getContextForAgent('reviewer', workItem.id);
+      if (historicalContext && historicalContext.length > config.maxContextLength) {
+        historicalContext = historicalContext.substring(0, config.maxContextLength) + '\n[Context truncated]';
+      }
+    } catch (error) {
+      console.warn('Failed to get historical context for reviewer:', error);
+    }
+  }
+  
   return CODE_QUALITY_REVIEWER_PROMPT
     .replace('{workItem}', itemStr)
-    .replace('{implementation}', implementation);
+    .replace('{implementation}', implementation)
+    .replace('{historicalContext}', historicalContext ? `\nHISTORICAL CONTEXT:\n${historicalContext}` : '');
 }
 
-export function buildBugBusterPrompt(bug: WorkItem, errorContext: string): string {
+export async function buildBugBusterPrompt(
+  bug: WorkItem, 
+  errorContext: string,
+  config: PromptConfig = DEFAULT_PROMPT_CONFIG
+): Promise<string> {
   const bugStr = `ID: ${bug.id}
 Title: ${bug.title}
 Description: ${bug.description || 'No description'}
 Status: ${bug.status}`;
   
+  let historicalContext = '';
+  if (config.enableHistoricalContext && config.contextManager) {
+    try {
+      historicalContext = await config.contextManager.getContextForAgent('bug-buster', bug.id);
+      if (historicalContext && historicalContext.length > config.maxContextLength) {
+        historicalContext = historicalContext.substring(0, config.maxContextLength) + '\n[Context truncated]';
+      }
+    } catch (error) {
+      console.warn('Failed to get historical context for bug-buster:', error);
+    }
+  }
+  
   return BUG_BUSTER_PROMPT
     .replace('{bug}', bugStr)
-    .replace('{errorContext}', errorContext);
+    .replace('{errorContext}', errorContext)
+    .replace('{historicalContext}', historicalContext ? `\nHISTORICAL CONTEXT:\n${historicalContext}` : '');
 }
