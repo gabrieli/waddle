@@ -9,13 +9,16 @@
   },
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch",
-    "test": "jest",
+    "dev": "tsx src/server/index.ts",
+    "start": "node dist/server/index.js",
+    "client": "tsx src/client.ts",
+    "test": "WADDLE_ENV=test jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
+    "test:integration": "WADDLE_ENV=test jest --testMatch='**/tests/integration/**/*.test.ts'",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
-    "clean": "rm -rf dist",
+    "clean": "rm -rf dist waddle.db waddle-test.db",
     "prepublishOnly": "npm run clean && npm run build"
   },
   "keywords": [
@@ -30,17 +33,22 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.20.1",
     "@octokit/rest": "^20.0.2",
+    "better-sqlite3": "^11.6.0",
     "commander": "^12.0.0",
-    "dotenv": "^16.4.1"
+    "dotenv": "^16.4.1",
+    "uuid": "^9.0.1"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.8",
     "@types/jest": "^29.5.11",
     "@types/node": "^20.11.5",
+    "@types/uuid": "^9.0.7",
     "@typescript-eslint/eslint-plugin": "^6.19.0",
     "@typescript-eslint/parser": "^6.19.0",
     "eslint": "^8.56.0",
     "jest": "^29.7.0",
     "ts-jest": "^29.1.1",
+    "tsx": "^4.7.0",
     "typescript": "^5.3.3"
   },
   "engines": {

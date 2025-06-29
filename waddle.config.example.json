@@ -1,0 +1,18 @@
+{
+  "environment": "local",
+  "server": {
+    "port": 8765,
+    "host": "localhost"
+  },
+  "claude": {
+    "executable": "/Users/gabrielionescu/.claude/local/claude",
+    "workingDirectory": ".",
+    "timeout": 30000
+  },
+  "agents": {
+    "developer": {
+      "maxConcurrent": 1,
+      "roleInstructionsPath": "./dev-roles/ROLE_DEVELOPER.md"
+    }
+  }
+}
