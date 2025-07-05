@@ -2,13 +2,15 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { execSync } from 'child_process';
 
-export interface DeveloperTask {
+export interface TesterTask {
   description: string;
   requirements?: string[];
   context?: string;
+  testScope?: string;
+  platforms?: string[];
 }
 
-export interface TaskResult {
+export interface TesterResult {
   success: boolean;
   output: string;
   error?: string;
@@ -18,8 +20,8 @@ export function loadInstructions(): string {
   const projectRoot = process.cwd();
   
   // Load role-specific instructions
-  const developerRole = readFileSync(
-    join(projectRoot, 'dev-roles', 'ROLE_DEVELOPER.md'),
+  const testerRole = readFileSync(
+    join(projectRoot, 'dev-roles', 'ROLE_TESTER.md'),
     'utf8'
   );
   
@@ -30,16 +32,24 @@ export function loadInstructions(): string {
   );
   
   // Combine instructions
-  return `${developerRole}\n\n## Project Structure Context\n\n${projectStructure}`;
+  return `${testerRole}\n\n## Project Structure Context\n\n${projectStructure}`;
 }
 
-export function buildPrompt(task: DeveloperTask): string {
+export function buildPrompt(task: TesterTask): string {
   const instructions = loadInstructions();
   
   let prompt = `${instructions}\n\n## Current Task\n\n${task.description}`;
   
   if (task.requirements && task.requirements.length > 0) {
     prompt += `\n\n## Requirements\n\n${task.requirements.map(req => `- ${req}`).join('\n')}`;
+  }
+  
+  if (task.testScope) {
+    prompt += `\n\n## Test Scope\n\n${task.testScope}`;
+  }
+  
+  if (task.platforms && task.platforms.length > 0) {
+    prompt += `\n\n## Target Platforms\n\n${task.platforms.map(platform => `- ${platform}`).join('\n')}`;
   }
   
   if (task.context) {
@@ -49,7 +59,7 @@ export function buildPrompt(task: DeveloperTask): string {
   return prompt;
 }
 
-export async function executeTask(task: DeveloperTask): Promise<TaskResult> {
+export async function executeTask(task: TesterTask): Promise<TesterResult> {
   try {
     const prompt = buildPrompt(task);
     

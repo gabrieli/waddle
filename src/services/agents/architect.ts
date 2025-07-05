@@ -2,13 +2,14 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { execSync } from 'child_process';
 
-export interface DeveloperTask {
+export interface ArchitectTask {
   description: string;
   requirements?: string[];
   context?: string;
+  scope?: string;
 }
 
-export interface TaskResult {
+export interface ArchitectResult {
   success: boolean;
   output: string;
   error?: string;
@@ -18,8 +19,8 @@ export function loadInstructions(): string {
   const projectRoot = process.cwd();
   
   // Load role-specific instructions
-  const developerRole = readFileSync(
-    join(projectRoot, 'dev-roles', 'ROLE_DEVELOPER.md'),
+  const architectRole = readFileSync(
+    join(projectRoot, 'dev-roles', 'ROLE_ARCHITECT.md'),
     'utf8'
   );
   
@@ -30,16 +31,20 @@ export function loadInstructions(): string {
   );
   
   // Combine instructions
-  return `${developerRole}\n\n## Project Structure Context\n\n${projectStructure}`;
+  return `${architectRole}\n\n## Project Structure Context\n\n${projectStructure}`;
 }
 
-export function buildPrompt(task: DeveloperTask): string {
+export function buildPrompt(task: ArchitectTask): string {
   const instructions = loadInstructions();
   
   let prompt = `${instructions}\n\n## Current Task\n\n${task.description}`;
   
   if (task.requirements && task.requirements.length > 0) {
     prompt += `\n\n## Requirements\n\n${task.requirements.map(req => `- ${req}`).join('\n')}`;
+  }
+  
+  if (task.scope) {
+    prompt += `\n\n## Scope\n\n${task.scope}`;
   }
   
   if (task.context) {
@@ -49,7 +54,7 @@ export function buildPrompt(task: DeveloperTask): string {
   return prompt;
 }
 
-export async function executeTask(task: DeveloperTask): Promise<TaskResult> {
+export async function executeTask(task: ArchitectTask): Promise<ArchitectResult> {
   try {
     const prompt = buildPrompt(task);
     
