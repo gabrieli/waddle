@@ -32,6 +32,10 @@ coverage/
 .DS_Store
 Thumbs.db
 
+# Database files (keep structure, ignore data)
+data/*.db
+data/*.db-*
+
 # Waddle specific
 .waddle/
 waddle.config.json

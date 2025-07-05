@@ -1,0 +1,160 @@
+import Database from 'better-sqlite3';
+
+/**
+ * Schema version information
+ */
+export const CURRENT_SCHEMA_VERSION = 1;
+
+/**
+ * Migration interface
+ */
+interface Migration {
+  version: number;
+  name: string;
+  up: string[];
+  down: string[];
+}
+
+/**
+ * All database migrations
+ */
+const migrations: Migration[] = [
+  {
+    version: 1,
+    name: 'initial_schema',
+    up: [
+      // Work Items Table
+      `CREATE TABLE work_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('new', 'in_progress', 'review', 'done')),
+        description TEXT,
+        type TEXT NOT NULL CHECK (type IN ('epic', 'user_story', 'bug')),
+        assigned_to TEXT CHECK (assigned_to IN ('developer', 'architect', 'tester')),
+        agent_id INTEGER,
+        parent_id INTEGER,
+        branch_name TEXT CHECK (branch_name LIKE 'feature/work-item-%-%' OR branch_name IS NULL),
+        worktree_path TEXT,
+        version INTEGER DEFAULT 1,
+        started_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (agent_id) REFERENCES agents(id),
+        FOREIGN KEY (parent_id) REFERENCES work_items(id)
+      )`,
+      
+      // Agents Table
+      `CREATE TABLE agents (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        type TEXT NOT NULL CHECK (type IN ('developer', 'architect', 'tester')),
+        work_item_id INTEGER,
+        version INTEGER DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (work_item_id) REFERENCES work_items(id)
+      )`,
+      
+      // State Transition Log Table
+      `CREATE TABLE state_transitions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        work_item_id INTEGER NOT NULL,
+        from_state TEXT,
+        to_state TEXT NOT NULL,
+        event TEXT,
+        agent_type TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (work_item_id) REFERENCES work_items(id)
+      )`,
+      
+      // Schema version tracking table
+      `CREATE TABLE schema_version (
+        version INTEGER PRIMARY KEY,
+        applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`,
+      
+      // Insert initial schema version
+      `INSERT INTO schema_version (version) VALUES (1)`
+    ],
+    down: [
+      'DROP TABLE IF EXISTS state_transitions',
+      'DROP TABLE IF EXISTS agents', 
+      'DROP TABLE IF EXISTS work_items',
+      'DROP TABLE IF EXISTS schema_version'
+    ]
+  }
+];
+
+/**
+ * Get current schema version from database
+ */
+export function getCurrentSchemaVersion(db: Database.Database): number {
+  try {
+    const result = db.prepare('SELECT MAX(version) as version FROM schema_version').get() as { version: number };
+    return result?.version || 0;
+  } catch (error) {
+    // Table doesn't exist, assume version 0
+    return 0;
+  }
+}
+
+/**
+ * Run database migrations
+ */
+export function runMigrations(db: Database.Database): void {
+  const currentVersion = getCurrentSchemaVersion(db);
+  
+  // Run migrations in a transaction
+  const transaction = db.transaction(() => {
+    for (const migration of migrations) {
+      if (migration.version > currentVersion) {
+        console.log(`Running migration ${migration.version}: ${migration.name}`);
+        
+        for (const statement of migration.up) {
+          db.exec(statement);
+        }
+        
+        // Update schema version
+        if (migration.version > 1) {
+          db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(migration.version);
+        }
+      }
+    }
+  });
+  
+  transaction();
+  
+  console.log(`Database schema up to date (version ${CURRENT_SCHEMA_VERSION})`);
+}
+
+/**
+ * Rollback to specific schema version
+ */
+export function rollbackToVersion(db: Database.Database, targetVersion: number): void {
+  const currentVersion = getCurrentSchemaVersion(db);
+  
+  if (targetVersion >= currentVersion) {
+    console.log('Target version is not lower than current version');
+    return;
+  }
+  
+  const transaction = db.transaction(() => {
+    // Find migrations to rollback (in reverse order)
+    const migrationsToRollback = migrations
+      .filter(m => m.version > targetVersion && m.version <= currentVersion)
+      .sort((a, b) => b.version - a.version);
+    
+    for (const migration of migrationsToRollback) {
+      console.log(`Rolling back migration ${migration.version}: ${migration.name}`);
+      
+      for (const statement of migration.down) {
+        db.exec(statement);
+      }
+      
+      // Remove schema version entry
+      db.prepare('DELETE FROM schema_version WHERE version = ?').run(migration.version);
+    }
+  });
+  
+  transaction();
+  
+  console.log(`Database rolled back to version ${targetVersion}`);
+}
