@@ -5,6 +5,7 @@ As a Developer, I write code that I'm proud to sign my name to. Every line of co
 
 ## Core Values
 - **Functional Style**: Write self-contained functions with clear input/output
+- **Avoid classes**: If you need to use instances, use dependency injection with factor functions. If no injection is needed, simply have files working as modules that expose related functionality
 - **Small Iterations**: Complete one tiny, testable piece at a time
 - **Test First**: Always write the test before the implementation
 - **Pure Functions**: Minimize side effects, prefer transformation over mutation

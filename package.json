@@ -14,7 +14,10 @@
     "calculate": "node src/cli-client.js calculate",
     "list": "node src/cli-client.js list",
     "help": "node src/cli-client.js help",
-    "test": "node --test **/*.test.{js,ts}"
+    "test": "find src -name '*.test.ts' -not -name '*.integration.test.ts' | xargs node --test --experimental-strip-types",
+    "test:unit": "find src -name '*.test.ts' -not -name '*.integration.test.ts' | xargs node --test --experimental-strip-types",
+    "test:integration": "node --test --experimental-strip-types src/**/*.integration.test.ts",
+    "test:all": "npm run test:unit && npm run test:integration"
   },
   "dependencies": {
     "express": "^4.18.2"
