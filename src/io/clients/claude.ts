@@ -26,35 +26,49 @@ export function executeClaude(prompt: string, options: ClaudeOptions = {}): Prom
   const { cwd = process.cwd(), verbose = false, timeout = 5000 } = options;
   
   return new Promise((resolve, reject) => {
-    const args = ['--print'];
+    const args = ['-p', '--dangerously-skip-permissions', prompt];
     const claudePath = process.env.HOME + '/.claude/local/claude';
+    
     const claude = spawn(claudePath, args, {
       cwd,
-      shell: false
+      shell: false,
+      detached: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        CI: 'true',
+        FORCE_COLOR: '0'
+      }
     });
 
     let output = '';
     let error = '';
     let timedOut = false;
+    let resolved = false;
 
     // Set up timeout
     const timeoutId = setTimeout(() => {
+      if (resolved) return;
       timedOut = true;
-      claude.kill('SIGTERM');
+      
+      try {
+        process.kill(-claude.pid, 'SIGKILL'); // Kill the process group
+      } catch (err) {
+        claude.kill('SIGKILL'); // Fallback to killing just the process
+      }
+      
       const errorMessage = `Claude command timed out after ${timeout}ms`;
+      resolved = true;
       if (verbose) {
         resolve({
           success: false,
+          output: output.trim(),
           error: errorMessage
         });
       } else {
         reject(new Error(errorMessage));
       }
     }, timeout);
-
-    // Write prompt to stdin
-    claude.stdin.write(prompt);
-    claude.stdin.end();
 
     claude.stdout.on('data', (data) => {
       output += data.toString();
@@ -67,7 +81,8 @@ export function executeClaude(prompt: string, options: ClaudeOptions = {}): Prom
     claude.on('close', (code) => {
       clearTimeout(timeoutId);
       
-      if (timedOut) return; // Already handled by timeout
+      if (resolved) return; // Already handled
+      resolved = true;
       
       const response: ClaudeResponse = {
         success: code === 0,
@@ -89,12 +104,14 @@ export function executeClaude(prompt: string, options: ClaudeOptions = {}): Prom
     claude.on('error', (err) => {
       clearTimeout(timeoutId);
       
-      if (timedOut) return; // Already handled by timeout
+      if (resolved) return; // Already handled
+      resolved = true;
       
       const errorMessage = `Failed to start Claude: ${err.message}`;
       if (verbose) {
         resolve({
           success: false,
+          output: output.trim(),
           error: errorMessage
         });
       } else {

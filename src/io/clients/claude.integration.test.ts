@@ -19,7 +19,7 @@ describe('Claude functional client', () => {
 
   // Example usage tests (commented out as they require Claude to be installed)
   test('should return output string by default (verbose=false)', async () => {
-    const output = await executeClaude('echo "4"', { timeout: 10000 });
+    const output = await executeClaude('echo "4"', { timeout: 30000 });
     
     assert(typeof output === 'string');
     assert(output.length > 0);
@@ -27,7 +27,7 @@ describe('Claude functional client', () => {
   });
 
   test('should return full response object with verbose=true', async () => {
-    const result = await executeClaude('echo "Hello"', { verbose: true, timeout: 10000 });
+    const result = await executeClaude('echo "Hello"', { verbose: true, timeout: 30000 });
     
     console.log('Result type:', typeof result);
     console.log('Result:', result);
@@ -71,7 +71,7 @@ describe('Claude functional client', () => {
   });
 
   test('should support custom working directory', async () => {
-    const result = await executeClaude('echo "test"', { cwd: '/tmp', verbose: true, timeout: 10000 });
+    const result = await executeClaude('echo "test"', { cwd: '/tmp', verbose: true, timeout: 30000 });
     assert(result instanceof Object);
     assert(result.success);
     assert(result.output);

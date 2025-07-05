@@ -1,108 +1,150 @@
 # Project Structure Guide
 
+## Core/Shell Architecture
+
+This project follows the **Core/Shell architecture** pattern to achieve clear separation between pure business logic and side effects, enabling better testability and maintainability.
+
 ## Directory Structure
 
 ```
 src/
-├── core/           # Pure business logic functions
-├── services/       # Side effects, external integrations
-│   ├── agents/     # AI agents and autonomous services
-│   ├── database/   # Database operations
-│   ├── auth/       # Authentication services
-│   └── ...         # Other service categories
-├── clients/        # External API/CLI clients
-│   ├── claude/     # Claude-specific clients
-│   ├── github/     # GitHub API clients
-│   └── ...         # Other external service clients
-├── utils/          # Utility functions (pure)
-│   ├── validation/ # Input validation utilities
-│   ├── formatting/ # Data formatting utilities
-│   └── ...         # Other utility categories
-├── types/          # TypeScript type definitions
-├── config/         # Configuration management
-└── server/         # Server/HTTP layer
-    ├── routes/     # Route handlers
-    ├── middleware/ # Express middleware
-    └── ...         # Other server components
+├── core/              # Pure business logic
+│   ├── agents/        # Agent prompt preparation and orchestration
+│   ├── workflows/     # Pure workflow orchestration
+│   ├── domain/        # Domain models and business rules
+│   └── validation/    # Input validation logic
+├── io/                # All side effects
+│   ├── clients/       # External API clients (Claude, GitHub, etc.)
+│   ├── db/            # Database operations
+│   ├── http/          # HTTP server and routes
+│   ├── fs/            # File system operations
+│   └── config/        # Configuration management
+├── lib/               # Utilities
+│   ├── fp/            # Functional programming utilities (pipe, compose)
+│   ├── result/        # Result type for error handling
+│   ├── types/         # TypeScript type definitions
+│   └── test/          # Test utilities and fixtures
+└── index.js           # Composition root
 
-tests/              # Test utilities and fixtures
-docs/               # Documentation
-scripts/            # Build and utility scripts
+docs/                  # Documentation
+scripts/               # Build and utility scripts
 ```
 
-### Subdirectory Organization Principles
+## Core/IO Architecture Principles
 
-**Organize by domain, not by file type:**
-- ✅ `services/agents/`, `services/auth/`, `services/database/`
-- ❌ `services/interfaces/`, `services/implementations/`
-
-**Keep related files together:**
-- Co-locate tests with their modules
-- Group related utilities in subdirectories
-- Maintain feature cohesion within directories
-
-**When to create subdirectories:**
-- **3+ related files**: Create subdirectory when you have 3 or more files serving the same domain
-- **Clear boundaries**: When functionality has distinct boundaries (auth, database, agents)
-- **Growth expectation**: When you expect the area to grow significantly
-- **Avoid deep nesting**: Maximum 3 levels deep (`src/services/agents/developer.ts`)
-
-### Agents Directory (`src/services/agents/`)
-
-Agents are autonomous services that:
-- Execute complex workflows
-- Make decisions based on context
-- Coordinate multiple operations
-- Have side effects (API calls, file operations, etc.)
-
-**Agent Categories:**
-- **Developer Agent**: Code generation, testing, debugging
-- **Architect Agent**: System design, structure planning
-- **QA Agent**: Testing, validation, quality assurance
-- **Manager Agent**: Workflow coordination, task delegation
-
-**Agent Structure:**
-```typescript
-// src/services/agents/developer.ts
-export async function executeTask(task: DeveloperTask): Promise<TaskResult> {
-  // Agent implementation with side effects
-}
-
-// src/services/agents/developer.test.ts
-// Co-located tests for the agent
-```
-
-## Functional Programming Principles
-
-### Pure Functions (src/core/)
-- **No side effects**: Functions should not mutate external state
+### Core Layer (`src/core/`)
+The core contains **pure business logic** with no side effects:
+- **Agents**: Prompt preparation and pure orchestration logic
+- **Domain models**: Business entities and rules
+- **Workflows**: Pure workflow orchestration
+- **Validation**: Input validation without I/O
 - **Deterministic**: Same input always produces same output
-- **Composable**: Functions should be easily combinable
-- **Single responsibility**: Each function does one thing well
+- **Testable**: Easy to unit test with no mocks needed
 
 ```typescript
-// ✅ Good - Pure function
-export function calculateTotal(items: Item[]): number {
-  return items.reduce((sum, item) => sum + item.price, 0);
+// ✅ Good - Pure agent prompt preparation
+export function prepareDeveloperPrompt(task: DeveloperTask, context: ProjectContext): Prompt {
+  const taskDescription = formatTaskDescription(task);
+  const contextInfo = extractRelevantContext(context);
+  return combinePromptElements(taskDescription, contextInfo);
 }
 
-// ❌ Bad - Side effects
-export function calculateTotalWithLog(items: Item[]): number {
-  console.log('Calculating total...'); // Side effect
-  return items.reduce((sum, item) => sum + item.price, 0);
+// ✅ Good - Pure workflow orchestration
+export function planDevelopmentWorkflow(requirements: Requirements): WorkflowPlan {
+  const validatedReqs = validateRequirements(requirements);
+  const tasks = decomposeTasks(validatedReqs);
+  return optimizeTaskOrder(tasks);
 }
 ```
 
-### Side Effects (src/services/, src/clients/)
-- **Isolated**: All I/O, logging, external calls go here
-- **Testable**: Return promises or use dependency injection
-- **Error handling**: Proper error boundaries and recovery
+### IO Layer (`src/io/`)
+The IO layer handles **all side effects** and external interactions:
+- **Clients**: External API integrations (Claude, GitHub, etc.)
+- **Database**: Data persistence operations
+- **HTTP**: Server endpoints and middleware
+- **File System**: File operations
+- **Config**: Environment and configuration management
 
 ```typescript
-// ✅ Good - Side effects isolated
-export async function saveUserData(userData: UserData): Promise<void> {
-  await database.users.insert(userData);
-  await auditLogger.log('USER_CREATED', userData.id);
+// ✅ Good - Side effects in IO layer
+export async function executeAgentTask(prompt: Prompt): Promise<AgentResult> {
+  await logger.logTaskStart(prompt.id);
+  const response = await claudeClient.generateResponse(prompt); // Side effect
+  await taskRepository.saveResult(response); // Side effect
+  return response;
+}
+```
+
+### Lib Layer (`src/lib/`)
+Shared utilities and foundational code:
+- **FP**: Functional programming utilities (pipe, compose, curry)
+- **Result**: Result type for functional error handling
+- **Types**: TypeScript definitions used across layers
+- **Test**: Testing utilities and fixtures
+
+### Organization Principles
+
+**Clear layer boundaries:**
+- ✅ `core/agents/`, `io/clients/`, `lib/fp/`
+- ❌ Mixing pure and impure code in same directory
+
+**Co-locate related functionality:**
+- Keep tests alongside their modules
+- Group domain concepts together
+- Maintain feature cohesion
+
+**Growth guidelines:**
+- **Start simple**: Create subdirectories only when needed (3+ related files)
+- **Domain-driven**: Organize by business domain, not technical concerns
+- **Shallow nesting**: Maximum 3 levels deep (`src/core/agents/developer.ts`)
+
+## Functional Programming in Core/IO
+
+### Core Layer Guidelines
+- **Pure functions only**: No I/O, logging, or external calls
+- **Immutable data**: Prefer immutable operations
+- **Composable**: Small functions that combine well
+- **Single responsibility**: Each function has one clear purpose
+
+```typescript
+// ✅ Good - Pure core function
+export function calculateTaskPriority(task: Task, context: ProjectContext): Priority {
+  const urgencyScore = calculateUrgency(task.deadline, context.currentDate);
+  const impactScore = calculateImpact(task.dependencies, context.tasks);
+  return combinePriorityScores(urgencyScore, impactScore);
+}
+
+// ✅ Good - Pure agent prompt preparation
+export function prepareArchitectPrompt(requirements: Requirements): ArchitectPrompt {
+  const structuredReqs = structureRequirements(requirements);
+  const designConstraints = extractConstraints(requirements);
+  return buildArchitectPrompt(structuredReqs, designConstraints);
+}
+
+// ❌ Bad - Side effects in core
+export function calculateTaskPriorityWithLog(task: Task): Priority {
+  console.log('Calculating priority...'); // Side effect!
+  return task.priority;
+}
+```
+
+### IO Layer Guidelines
+- **Handle all side effects**: I/O, API calls, logging, mutations
+- **Depend on core**: Use core functions for business logic
+- **Error boundaries**: Proper error handling and recovery
+
+```typescript
+// ✅ Good - IO orchestrating core logic with side effects
+export async function processDevelopmentTask(taskId: string): Promise<TaskResult> {
+  const task = await taskRepository.findById(taskId); // Side effect
+  const priority = calculateTaskPriority(task, await getProjectContext()); // Core logic
+  
+  await taskLogger.logProcessingStart(taskId); // Side effect
+  const prompt = prepareDeveloperPrompt(task, priority); // Core logic
+  const result = await claudeClient.execute(prompt); // Side effect
+  await taskRepository.save(result); // Side effect
+  
+  return result;
 }
 ```
 
@@ -160,15 +202,34 @@ src/
 
 ## Data Flow Architecture
 
-### Functional Composition
+### Core/IO Data Flow
 ```
-Input → Pure Functions (core) → Side Effects (services) → Output
+Input → IO (validation) → Core (business logic) → IO (side effects) → Output
 ```
 
-1. **Input validation** (utils)
-2. **Business logic** (core) - pure functions
-3. **External operations** (services/clients)
-4. **Response formatting** (utils)
+1. **Input handling**: IO receives and validates input
+2. **Business logic**: Core processes data with pure functions
+3. **Side effects**: IO executes I/O operations
+4. **Output**: IO formats and returns results
+
+### Example Flow
+```typescript
+// IO: Input validation and orchestration
+export async function handleCreateProject(request: CreateProjectRequest): Promise<ProjectResponse> {
+  const validatedData = validateProjectRequest(request); // Could be core if pure
+  
+  // Core: Business logic
+  const projectPlan = createProjectPlan(validatedData);
+  const taskBreakdown = generateTaskBreakdown(projectPlan);
+  const agentPrompts = prepareAgentPrompts(taskBreakdown);
+  
+  // IO: Side effects
+  const savedProject = await projectRepository.save(projectPlan);
+  const agentResults = await claudeClient.executeBatch(agentPrompts);
+  await notificationService.notifyTeam(savedProject);
+  
+  return formatProjectResponse(savedProject, agentResults);
+}
 
 ### Error Handling
 ```typescript
@@ -187,36 +248,87 @@ export async function saveUser(user: User): Promise<Result<UserId, SaveError>> {
 ## Development Guidelines
 
 ### For Architects
-- Design pure function interfaces first
-- Isolate side effects to service boundaries
-- Define clear type contracts
-- Plan composition patterns
-- **Update this documentation when changing project structure**
+- Design core interfaces as pure functions first
+- Keep all side effects in shell layer
+- Define clear contracts between core and shell
+- Plan for testability and composability
+- **Update this documentation when changing architecture**
 
 ### For Developers
-- Write pure functions in `src/core/`
-- Put side effects in `src/services/` or `src/clients/`
-- Test pure functions with unit tests
-- Test side effects with integration tests
-- Follow single responsibility principle
-- Prefer composition over inheritance
-- **Organize files into subdirectories by domain when you have 3+ related files**
-- **Update project structure documentation when adding new directories**
+- **Core**: Write pure functions only - no I/O, no mutations
+- **IO**: Handle all side effects and external interactions
+- **Lib**: Create reusable utilities and type definitions
+- Test core with fast unit tests (no mocks needed)
+- Test IO with integration tests for side effects
+- **Organize by domain when you have 3+ related files**
 
 ### Documentation Maintenance
-- **Always update this file when modifying the directory structure**
+- **Always update this file when modifying the structure**
 - Document new subdirectories and their purpose
-- Update examples to reflect current structure
-- Keep the tree structure in sync with actual project layout
+- Keep examples current with actual implementation
+- Update the directory tree when adding new areas
 
-## Dependencies
-- **Core modules**: No dependencies on services/clients
-- **Services**: Can depend on core and utils
-- **Clients**: Can depend on core and utils
-- **Utils**: Self-contained, minimal dependencies
+## Layer Dependencies
 
-This structure promotes:
-- **Testability**: Pure functions are easy to test
+```
+┌─────────────┐    ┌─────────────┐
+│     IO      │───▶│    Core     │
+│             │    │             │
+│ • Clients   │    │ • Agents    │
+│ • Database  │    │ • Domain    │
+│ • HTTP      │    │ • Workflows │
+│ • Config    │    │ • Validation│
+│ • FS        │    │             │
+└─────────────┘    └─────────────┘
+       │                  │
+       ▼                  ▼
+┌─────────────────────────────────┐
+│            Lib                  │
+│                                 │
+│ • FP  • Result  • Types  • Test │
+└─────────────────────────────────┘
+```
+
+**Dependency Rules:**
+- **Core**: Can only depend on lib (types, pure utils)
+- **IO**: Can depend on core and lib
+- **Lib**: Self-contained, minimal external dependencies
+
+## Speculative Evolution (When Needed)
+
+As the project grows, consider these extensions:
+
+### Advanced Core Structure
+```
+src/core/
+├── domain/
+│   ├── project/     # Project management domain
+│   ├── task/        # Task management domain
+│   └── agent/       # Agent behavior domain
+├── workflows/
+│   ├── development/ # Development workflows
+│   ├── testing/     # Testing workflows
+│   └── deployment/  # Deployment workflows
+└── policies/        # Business rules and policies
+```
+
+### Advanced IO Structure
+```
+src/io/
+├── adapters/        # External service adapters
+├── repositories/    # Data persistence adapters
+├── events/          # Event handling and messaging
+└── infrastructure/  # Platform-specific code
+```
+
+### When to Evolve
+- **5+ files in a directory**: Consider subdirectories
+- **Complex domains emerge**: Split into focused modules
+- **Integration complexity**: Add adapter layers
+- **Cross-cutting concerns**: Add infrastructure layer
+
+This architecture promotes:
+- **Testability**: Core is pure, IO is isolated
 - **Maintainability**: Clear separation of concerns
-- **Reusability**: Composable functions
-- **Performance**: Fast unit tests, isolated integration tests
+- **Flexibility**: Easy to swap IO implementations
+- **Performance**: Fast core tests, targeted integration tests

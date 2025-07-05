@@ -50,20 +50,41 @@ CREATE TABLE agents (
 4. **State Management**: Claude Code hooks for state transitions ensure proper workflow
 5. **Agent Reset**: Clear agents on startup to ensure clean state
 
-### Architecture Components
+### Architecture Components (Core/Shell)
 
 ```
-┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│   HTTP Server   │────▶│  Work Scheduler  │────▶│  SQLite DB      │
-│   (Express)     │     │  (5s interval)   │     │  - work_items   │
-└─────────────────┘     └──────────────────┘     │  - agents       │
-         │                       │                └─────────────────┘
-         │                       │                         ▲
-         ▼                       ▼                         │
-┌─────────────────┐     ┌──────────────────┐             │
-│  Claude Hooks   │     │  Agent Workers   │─────────────┘
-│  (State Trans.) │     │  (Dev/Arch/Test) │
-└─────────────────┘     └──────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                        IO Layer (Shell)                     │
+│                                                             │
+│  ┌───────────────┐  ┌──────────────┐  ┌─────────────────┐  │
+│  │   HTTP API    │  │   Database   │  │  Claude Client  │  │
+│  │ (Express/REST)│  │   (SQLite)   │  │   (Claude CLI)  │  │
+│  └───────────────┘  └──────────────┘  └─────────────────┘  │
+│           │                │                     │         │
+└───────────┼────────────────┼─────────────────────┼─────────┘
+            │                │                     │
+┌───────────▼────────────────▼─────────────────────▼─────────┐
+│                        Core Layer                          │
+│                                                             │
+│  ┌───────────────┐  ┌──────────────┐  ┌─────────────────┐  │
+│  │   Workflows   │  │    Domain    │  │     Agents      │  │
+│  │ • Assignment  │  │ • WorkItem   │  │ • Task Prep     │  │
+│  │ • Scheduling  │  │ • Agent      │  │ • Orchestration │  │
+│  │ • State Mgmt  │  │ • Epic       │  │ • Validation    │  │
+│  └───────────────┘  └──────────────┘  └─────────────────┘  │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+            │                │                     │
+┌───────────▼────────────────▼─────────────────────▼─────────┐
+│                        Lib Layer                           │
+│                                                             │
+│  ┌───────────────┐  ┌──────────────┐  ┌─────────────────┐  │
+│  │      FP       │  │    Result    │  │     Types       │  │
+│  │ • pipe        │  │ • Success    │  │ • WorkItem      │  │
+│  │ • compose     │  │ • Failure    │  │ • Agent         │  │
+│  │ • curry       │  │ • match      │  │ • Task          │  │
+│  └───────────────┘  └──────────────┘  └─────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ## Goals
@@ -74,11 +95,20 @@ CREATE TABLE agents (
 3. **Role-Based Assignment**: Work items assigned to appropriate roles (architect → epic, developer → user story)
 4. **Parent-Child Relationships**: Epics contain user stories, completion tracked automatically
 
+### Core/Shell Architecture Benefits for Work Tracking
+1. **Pure Business Logic**: Assignment rules, state machines, and completion logic are pure functions in core/
+2. **Fast Testing**: Core workflow logic can be unit tested without database or API dependencies
+3. **Composable Logic**: Assignment algorithms, state validation, and epic completion can be composed functionally
+4. **Side Effect Isolation**: All I/O (database, API calls, Claude integration) isolated to IO layer
+5. **Domain Clarity**: Clear separation between work tracking domain logic and technical infrastructure
+
 ### Success Criteria
 - Agents successfully pick up and process work items
 - State transitions occur correctly via hooks
 - Epic completion tracked when all child user stories complete
 - System recovers cleanly on restart
+- Core business logic is pure and fast to test
+- IO layer handles all side effects reliably
 
 ## User Stories
 
@@ -95,12 +125,13 @@ CREATE TABLE agents (
 
 **Technical Notes:**
 - Use better-sqlite3 for synchronous API and better performance
-- Create `src/services/database/` module
+- Create `src/io/db/` module for database operations
+- Create `src/core/domain/` for WorkItem and Agent models
 - Implement schema versioning for migrations
 
 **Testing Requirements:**
 - Unit tests: Business rule validation via database constraints
-- Tests: `src/services/database/constraints.test.ts`
+- Tests: `src/io/db/constraints.test.ts`
   - ✅ Should enforce work_items status constraints (reject invalid status values)
   - ✅ Should enforce foreign key relationships (prevent orphaned records)
 
@@ -140,17 +171,20 @@ CREATE TABLE agents (
 **Proper error handling, validation, and transaction support**
 
 **Technical Notes:**
-- Add routes to Express server
-- Create `src/server/routes/work-items.ts`
-- Create `src/server/routes/agents.ts`
+- Core/Shell separation:
+  - **Core**: Business logic in `src/core/workflows/` (assignment, scheduling, state management)
+  - **Core**: Domain models in `src/core/domain/` (WorkItem, Agent, Epic entities)
+  - **IO**: HTTP routes in `src/io/http/routes/` (work-items.ts, agents.ts)
+  - **IO**: Database operations in `src/io/db/` (repositories, queries)
 - Add comprehensive request validation middleware
-- All database operations go through API layer
+- All side effects isolated to IO layer
+- Pure business logic in core layer enables fast unit testing
 - Transaction support for multi-table updates
 - Optimistic locking support for concurrent updates
 
 **Testing Requirements:**
 - Integration tests: All API endpoints with real database operations
-- Tests: `src/server/routes/work-items.integration.test.ts`
+- Tests: `src/io/http/routes/work-items.integration.test.ts`
 
 **Work Items API Tests:**
   - ✅ Should create work items via POST /api/work-items
@@ -197,14 +231,16 @@ CREATE TABLE agents (
 - Startup logs show successful initialization
 
 **Technical Notes:**
-- Add initialization to `src/server/index.js`
-- Create `src/services/agents/agent-manager.ts`
+- Core/Shell separation:
+  - **Core**: Agent initialization logic in `src/core/workflows/agent-initialization.ts` (pure functions)
+  - **IO**: API calls in `src/io/http/` to interact with endpoints
+  - **Composition**: Orchestration in main server initialization
 - Use API endpoints: DELETE /api/agents, POST /api/agents, PUT /api/work-items/clear-assignments
 - Handle API call errors gracefully
 
 **Testing Requirements:**
 - Unit tests: API call logic and error handling
-- Tests: `src/services/agents/agent-manager.test.ts`
+- Tests: `src/core/workflows/agent-initialization.test.ts` (pure functions), `src/io/http/agent-init.test.ts` (API integration)
   - ✅ Should call DELETE /api/agents on initialization
   - ✅ Should call POST /api/agents to create 3 agents (developer, architect, tester)
   - ✅ Should call PUT /api/work-items/clear-assignments
@@ -228,14 +264,16 @@ CREATE TABLE agents (
 - Handles race conditions with optimistic locking
 
 **Technical Notes:**
-- Use setInterval with error handling
-- Create `src/services/scheduler/work-scheduler.ts`
+- Core/Shell separation:
+  - **Core**: Assignment logic in `src/core/workflows/work-assignment.ts` (pure scheduling algorithms)
+  - **Core**: Assignment rules in `src/core/domain/assignment-rules.ts` (pure business rules)
+  - **IO**: Scheduler orchestration in `src/io/scheduler/` (setInterval, API calls, side effects)
 - Use API endpoints: GET /api/agents/available, GET /api/work-items/assignable, PUT /api/work-items/:id/assign
 - API handles atomic updates and race conditions
 
 **Testing Requirements:**
 - Unit tests: Scheduler logic and API interaction
-- Tests: `src/services/scheduler/work-scheduler.test.ts`
+- Tests: `src/core/workflows/work-assignment.test.ts` (pure logic), `src/io/scheduler/scheduler.test.ts` (integration)
   - ✅ Should call GET /api/agents/available to find idle agents
   - ✅ Should call GET /api/work-items/assignable with correct filters for each agent type
   - ✅ Should call PUT /api/work-items/:id/assign for matching work
@@ -256,13 +294,16 @@ CREATE TABLE agents (
 - Parent-child relationship properly maintained
 
 **Technical Notes:**
-- Create `src/services/work-items/epic-handler.ts`
+- Core/Shell separation:
+  - **Core**: Epic completion logic in `src/core/workflows/epic-completion.ts` (pure business rules)
+  - **Core**: Epic domain model in `src/core/domain/epic.ts` (entities and validation)
+  - **IO**: Epic handler orchestration in `src/io/handlers/epic-handler.ts` (API calls, side effects)
 - Use API endpoints: PUT /api/work-items/:id/state, GET /api/work-items/:id/children, PUT /api/work-items/:id/auto-complete
 - API handles completion checking logic
 
 **Testing Requirements:**
 - Unit tests: Epic handler API interaction
-- Tests: `src/services/work-items/epic-handler.test.ts`
+- Tests: `src/core/workflows/epic-completion.test.ts` (pure logic), `src/io/handlers/epic-handler.test.ts` (integration)
   - ✅ Should call PUT /api/work-items/:id/state to transition epic to 'in_progress'
   - ✅ Should call PUT /api/work-items/:id/auto-complete for completion checks
   - ✅ Should handle API call failures gracefully
@@ -281,13 +322,16 @@ CREATE TABLE agents (
 - State transitions trigger parent epic checks
 
 **Technical Notes:**
-- Create `src/services/work-items/user-story-handler.ts`
+- Core/Shell separation:
+  - **Core**: User story state machine in `src/core/workflows/user-story-state.ts` (pure state transitions)
+  - **Core**: User story domain model in `src/core/domain/user-story.ts` (entities and validation)
+  - **IO**: User story handler in `src/io/handlers/user-story-handler.ts` (API calls, side effects)
 - Use API endpoints: PUT /api/work-items/:id/state, POST /api/work-items/:id/trigger-parent-check
 - API handles state validation and locking
 
 **Testing Requirements:**
 - Unit tests: User story handler API interaction
-- Tests: `src/services/work-items/user-story-handler.test.ts`
+- Tests: `src/core/workflows/user-story-state.test.ts` (pure logic), `src/io/handlers/user-story-handler.test.ts` (integration)
   - ✅ Should call PUT /api/work-items/:id/state for state transitions
   - ✅ Should call POST /api/work-items/:id/trigger-parent-check after completion
   - ✅ Should handle API call failures gracefully
@@ -360,14 +404,18 @@ CREATE TABLE agents (
 - Failures handled gracefully
 
 **Technical Notes:**
-- Integrate with existing `src/services/agents/developer.ts`, etc.
-- Create `src/services/work-items/agent-executor.ts`
+- Core/Shell separation:
+  - **Core**: Agent task preparation in `src/core/agents/` (pure prompt preparation, orchestration logic)
+  - **Core**: Task validation in `src/core/domain/task.ts` (entities and business rules)
+  - **IO**: Claude client integration in `src/io/clients/claude-client.ts` (external API calls)
+  - **IO**: Agent executor orchestration in `src/io/agents/agent-executor.ts` (side effects)
+- Integrate with existing agents (developer.ts, architect.ts, tester.ts) - move to core/agents/
 - Use API endpoints: GET /api/work-items/:id/task-details, PUT /api/work-items/:id/execution-result
 - Add execution logging and error handling
 
 **Testing Requirements:**
 - Unit tests: Agent execution and API interaction
-- Tests: `src/services/work-items/agent-executor.test.ts`
+- Tests: `src/core/agents/` (pure agent logic), `src/io/agents/agent-executor.test.ts` (integration)
   - ✅ Should call GET /api/work-items/:id/task-details to get work details
   - ✅ Should execute appropriate agent (developer/architect/tester) with task details
   - ✅ Should call PUT /api/work-items/:id/execution-result to store results
