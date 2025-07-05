@@ -1,62 +1,25 @@
 {
   "name": "waddle",
-  "version": "1.0.0",
-  "description": "Autonomous development orchestrator",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "bin": {
-    "waddle": "./dist/cli.js"
-  },
+  "version": "0.0.1",
+  "type": "module",
+  "description": "HTTP server with CLI client for commands",
+  "main": "src/server.js",
   "scripts": {
-    "build": "tsc",
-    "dev": "tsx src/server/index.ts",
-    "start": "node dist/server/index.js",
-    "client": "tsx src/client.ts",
-    "test": "WADDLE_ENV=test jest",
-    "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage",
-    "test:integration": "WADDLE_ENV=test jest --testMatch='**/tests/integration/**/*.test.ts'",
-    "lint": "eslint src --ext .ts",
-    "lint:fix": "eslint src --ext .ts --fix",
-    "clean": "rm -rf dist waddle.db waddle-test.db",
-    "prepublishOnly": "npm run clean && npm run build"
+    "start": "node src/server.js",
+    "dev": "node --watch server.js",
+    "cli": "node src/cli-client.js",
+    "status": "node src/cli-client.js status",
+    "echo": "node src/cli-client.js echo",
+    "process": "node src/cli-client.js process",
+    "calculate": "node src/cli-client.js calculate",
+    "list": "node src/cli-client.js list",
+    "help": "node src/cli-client.js help",
+    "test": "node --test **/*.test.{js,ts}"
   },
-  "keywords": [
-    "automation",
-    "development",
-    "orchestration",
-    "ai",
-    "waddle"
-  ],
-  "author": "Gabriel Ionescu",
-  "license": "MIT",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.20.1",
-    "@octokit/rest": "^20.0.2",
-    "better-sqlite3": "^11.6.0",
-    "commander": "^12.0.0",
-    "dotenv": "^16.4.1",
-    "uuid": "^9.0.1"
-  },
-  "devDependencies": {
-    "@types/better-sqlite3": "^7.6.8",
-    "@types/jest": "^29.5.11",
-    "@types/node": "^20.11.5",
-    "@types/uuid": "^9.0.7",
-    "@typescript-eslint/eslint-plugin": "^6.19.0",
-    "@typescript-eslint/parser": "^6.19.0",
-    "eslint": "^8.56.0",
-    "jest": "^29.7.0",
-    "ts-jest": "^29.1.1",
-    "tsx": "^4.7.0",
-    "typescript": "^5.3.3"
+    "express": "^4.18.2"
   },
   "engines": {
-    "node": ">=16.0.0"
-  },
-  "files": [
-    "dist/**/*",
-    "README.md",
-    "LICENSE"
-  ]
+    "node": ">=14.0.0"
+  }
 }

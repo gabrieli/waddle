@@ -1,7 +1,4 @@
 # Development Guidelines for Claude
-## CRITICAL
-Inside orchestrator-DEPRECATED, we have old code that we can only use a reference, but that functionality will be removed once we have the new implementation. 
-Add the new implementation in src/
 
 ## Code Style
 - Use consistent indentation (spaces or tabs as per project convention)
