@@ -95,20 +95,11 @@ CREATE TABLE agents (
 3. **Role-Based Assignment**: Work items assigned to appropriate roles (architect → epic, developer → user story)
 4. **Parent-Child Relationships**: Epics contain user stories, completion tracked automatically
 
-### Core/Shell Architecture Benefits for Work Tracking
-1. **Pure Business Logic**: Assignment rules, state machines, and completion logic are pure functions in core/
-2. **Fast Testing**: Core workflow logic can be unit tested without database or API dependencies
-3. **Composable Logic**: Assignment algorithms, state validation, and epic completion can be composed functionally
-4. **Side Effect Isolation**: All I/O (database, API calls, Claude integration) isolated to IO layer
-5. **Domain Clarity**: Clear separation between work tracking domain logic and technical infrastructure
-
 ### Success Criteria
 - Agents successfully pick up and process work items
 - State transitions occur correctly via hooks
 - Epic completion tracked when all child user stories complete
 - System recovers cleanly on restart
-- Core business logic is pure and fast to test
-- IO layer handles all side effects reliably
 
 ## User Stories
 
@@ -137,7 +128,70 @@ CREATE TABLE agents (
 
 ---
 
-### US-002: Comprehensive Work Tracking API
+### US-002: Agent Initialization on Server Startup
+**As a** system  
+**I want** to reset and create agents on startup  
+**So that** the system starts in a clean, predictable state  
+
+**Acceptance Criteria:**
+- On server start, agents table is cleared
+- Three agents created: developer, architect, tester
+- All work items have agent_id and started_at cleared
+- Startup logs show successful initialization
+
+**Technical Notes:**
+- Core/Shell separation:
+  - **Core**: Agent initialization logic in `src/core/workflows/agent-initialization.ts` (pure functions)
+  - **IO**: API calls in `src/io/http/` to interact with endpoints
+  - **Composition**: Orchestration in main server initialization
+- Use API endpoints: DELETE /api/agents, POST /api/agents, PUT /api/work-items/clear-assignments
+- Handle API call errors gracefully
+
+**Testing Requirements:**
+- Unit tests: API call logic and error handling
+- Tests: `src/core/workflows/agent-initialization.test.ts` (pure functions), `src/io/http/agent-init.test.ts` (API integration)
+  - ✅ Should call DELETE /api/agents on initialization
+  - ✅ Should call POST /api/agents to create 3 agents (developer, architect, tester)
+  - ✅ Should call PUT /api/work-items/clear-assignments
+  - ✅ Should handle API call failures gracefully
+
+---
+
+### US-003: Work Item Assignment Scheduler
+**As a** system  
+**I want** to check for idle agents every 5 seconds  
+**So that** available agents are assigned work automatically  
+
+**Acceptance Criteria:**
+- Scheduler runs every 5 seconds
+- Finds agents without assigned work
+- Assigns appropriate work items based on rules:
+  - Architects → new epics
+  - Developers → new user stories  
+  - Testers → user stories in review
+- Updates both agents and work_items tables atomically
+- Handles race conditions with optimistic locking
+
+**Technical Notes:**
+- Core/Shell separation:
+  - **Core**: Assignment logic in `src/core/workflows/work-assignment.ts` (pure scheduling algorithms)
+  - **Core**: Assignment rules in `src/core/domain/assignment-rules.ts` (pure business rules)
+  - **IO**: Scheduler orchestration in `src/io/scheduler/` (setInterval, API calls, side effects)
+- Use API endpoints: GET /api/agents/available, GET /api/work-items/assignable, PUT /api/work-items/:id/assign
+- API handles atomic updates and race conditions
+
+**Testing Requirements:**
+- Unit tests: Scheduler logic and API interaction
+- Tests: `src/core/workflows/work-assignment.test.ts` (pure logic), `src/io/scheduler/scheduler.test.ts` (integration)
+  - ✅ Should call GET /api/agents/available to find idle agents
+  - ✅ Should call GET /api/work-items/assignable with correct filters for each agent type
+  - ✅ Should call PUT /api/work-items/:id/assign for matching work
+  - ✅ Should handle API call failures gracefully
+  - ✅ Should respect assignment rules (architect→epic, developer→user story, tester→review)
+
+---
+
+### US-004: Comprehensive Work Tracking API
 **As a** system component  
 **I want** comprehensive REST endpoints for all work tracking operations  
 **So that** all system services use a consistent API layer  
@@ -219,68 +273,6 @@ CREATE TABLE agents (
 
 ---
 
-### US-003: Agent Initialization on Server Startup
-**As a** system  
-**I want** to reset and create agents on startup  
-**So that** the system starts in a clean, predictable state  
-
-**Acceptance Criteria:**
-- On server start, agents table is cleared
-- Three agents created: developer, architect, tester
-- All work items have agent_id and started_at cleared
-- Startup logs show successful initialization
-
-**Technical Notes:**
-- Core/Shell separation:
-  - **Core**: Agent initialization logic in `src/core/workflows/agent-initialization.ts` (pure functions)
-  - **IO**: API calls in `src/io/http/` to interact with endpoints
-  - **Composition**: Orchestration in main server initialization
-- Use API endpoints: DELETE /api/agents, POST /api/agents, PUT /api/work-items/clear-assignments
-- Handle API call errors gracefully
-
-**Testing Requirements:**
-- Unit tests: API call logic and error handling
-- Tests: `src/core/workflows/agent-initialization.test.ts` (pure functions), `src/io/http/agent-init.test.ts` (API integration)
-  - ✅ Should call DELETE /api/agents on initialization
-  - ✅ Should call POST /api/agents to create 3 agents (developer, architect, tester)
-  - ✅ Should call PUT /api/work-items/clear-assignments
-  - ✅ Should handle API call failures gracefully
-
----
-
-### US-004: Work Item Assignment Scheduler
-**As a** system  
-**I want** to check for idle agents every 5 seconds  
-**So that** available agents are assigned work automatically  
-
-**Acceptance Criteria:**
-- Scheduler runs every 5 seconds
-- Finds agents without assigned work
-- Assigns appropriate work items based on rules:
-  - Architects → new epics
-  - Developers → new user stories  
-  - Testers → user stories in review
-- Updates both agents and work_items tables atomically
-- Handles race conditions with optimistic locking
-
-**Technical Notes:**
-- Core/Shell separation:
-  - **Core**: Assignment logic in `src/core/workflows/work-assignment.ts` (pure scheduling algorithms)
-  - **Core**: Assignment rules in `src/core/domain/assignment-rules.ts` (pure business rules)
-  - **IO**: Scheduler orchestration in `src/io/scheduler/` (setInterval, API calls, side effects)
-- Use API endpoints: GET /api/agents/available, GET /api/work-items/assignable, PUT /api/work-items/:id/assign
-- API handles atomic updates and race conditions
-
-**Testing Requirements:**
-- Unit tests: Scheduler logic and API interaction
-- Tests: `src/core/workflows/work-assignment.test.ts` (pure logic), `src/io/scheduler/scheduler.test.ts` (integration)
-  - ✅ Should call GET /api/agents/available to find idle agents
-  - ✅ Should call GET /api/work-items/assignable with correct filters for each agent type
-  - ✅ Should call PUT /api/work-items/:id/assign for matching work
-  - ✅ Should handle API call failures gracefully
-  - ✅ Should respect assignment rules (architect→epic, developer→user story, tester→review)
-
----
 
 ### US-005: Epic Work Item Management
 **As an** architect agent  
@@ -404,18 +396,14 @@ CREATE TABLE agents (
 - Failures handled gracefully
 
 **Technical Notes:**
-- Core/Shell separation:
-  - **Core**: Agent task preparation in `src/core/agents/` (pure prompt preparation, orchestration logic)
-  - **Core**: Task validation in `src/core/domain/task.ts` (entities and business rules)
-  - **IO**: Claude client integration in `src/io/clients/claude-client.ts` (external API calls)
-  - **IO**: Agent executor orchestration in `src/io/agents/agent-executor.ts` (side effects)
-- Integrate with existing agents (developer.ts, architect.ts, tester.ts) - move to core/agents/
+- Integrate with existing `src/services/agents/developer.ts`, etc.
+- Create `src/services/work-items/agent-executor.ts`
 - Use API endpoints: GET /api/work-items/:id/task-details, PUT /api/work-items/:id/execution-result
 - Add execution logging and error handling
 
 **Testing Requirements:**
 - Unit tests: Agent execution and API interaction
-- Tests: `src/core/agents/` (pure agent logic), `src/io/agents/agent-executor.test.ts` (integration)
+- Tests: `src/services/work-items/agent-executor.test.ts`
   - ✅ Should call GET /api/work-items/:id/task-details to get work details
   - ✅ Should execute appropriate agent (developer/architect/tester) with task details
   - ✅ Should call PUT /api/work-items/:id/execution-result to store results
