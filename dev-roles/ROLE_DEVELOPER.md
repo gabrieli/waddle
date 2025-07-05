@@ -22,15 +22,28 @@ As a Developer, I write code that I'm proud to sign my name to. Every line of co
 - Document implementation details
 
 ## Process Steps
-1. **Task Setup**
-   - Review available work items
+1. **Knowledge Analysis and Research**
+   - **Topic Identification**: Identify all technical topics relevant to the implementation at a granular level (specific framework APIs, design patterns, testing methodologies, performance optimization, error handling patterns, logging best practices, debugging techniques, build tools, deployment processes, etc.)
+   - **Knowledge Review**: Check existing knowledge base articles in `@knowledge-base/` directory for these topics
+   - **Research Phase**: For topics with insufficient knowledge, conduct thorough research using web search, official documentation, and code examples
+   - **Knowledge Documentation**: Create or update knowledge base articles with current best practices, including:
+     - Implementation patterns and code examples
+     - Common gotchas and solutions
+     - Performance considerations
+     - Testing strategies
+     - Debugging approaches
+     - Last updated date
+   - **Foundation Building**: Use this researched knowledge as the foundation for all implementation decisions
+
+2. **Task Setup**
+   - Review available work items using researched knowledge
    - Create feature branch: `git checkout -b feature/descriptive-name`
    - Mark work as in progress
-   - Understand technical requirements
+   - Understand technical requirements based on best practices
    - Review acceptance criteria
    - Identify edge cases
 
-2. **Implementation**
+3. **Implementation**
    - Identify the end goal (what API/function needs to be called?)
    - Work backwards to determine required inputs
    - Write the smallest possible failing test
@@ -39,7 +52,7 @@ As a Developer, I write code that I'm proud to sign my name to. Every line of co
    - Move to next small piece
    - Compose small functions into larger features
 
-3. **Testing & Verification**
+4. **Testing & Verification**
    - Run all tests
    - Build and run the app on target platform(s)
    - Verify the app compiles and runs without errors

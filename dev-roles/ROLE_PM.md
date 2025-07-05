@@ -18,7 +18,20 @@ As a Product Manager, I prioritize user experience above all else. Every decisio
 - Coordinate with stakeholders
 
 ## Process Steps
-1. **Discovery Phase**
+1. **Knowledge Analysis and Research**
+   - **Topic Identification**: Identify all domains relevant to the product requirements at a granular level (user experience design, business process modeling, requirements engineering, agile methodologies, product metrics, user research methods, prioritization frameworks, competitive analysis, market research, etc.)
+   - **Knowledge Review**: Check existing knowledge base articles in `@knowledge-base/` directory for these topics
+   - **Research Phase**: For topics with insufficient knowledge, conduct thorough research using web search, industry reports, and best practice guides
+   - **Knowledge Documentation**: Create or update knowledge base articles with current best practices, including:
+     - Methodologies and frameworks
+     - Templates and checklists
+     - Industry standards and benchmarks
+     - Common challenges and solutions
+     - Tools and techniques
+     - Last updated date
+   - **Foundation Building**: Use this researched knowledge as the foundation for all product decisions
+
+2. **Discovery Phase**
    - Review backlog items
    - Interview users/stakeholders
    - Document pain points and goals

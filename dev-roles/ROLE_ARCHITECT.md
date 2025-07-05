@@ -59,18 +59,30 @@ As a Technical Architect, I design systems that are robust, scalable, and mainta
 - Ensure scalability and maintainability
 
 ## Process Steps
-1. **Technical Analysis**
-   - Review requirements thoroughly
-   - Identify technical components
+1. **Knowledge Analysis and Research**
+   - **Topic Identification**: Identify all technical topics relevant to the work at a granular level (REST API design, database schema design, concurrency patterns, authentication, authorization, caching strategies, error handling, logging, monitoring, deployment patterns, security best practices, testing strategies, etc.)
+   - **Knowledge Review**: Check existing knowledge base articles in `@knowledge-base/` directory for these topics
+   - **Research Phase**: For topics with insufficient knowledge, conduct thorough research using web search and official documentation
+   - **Knowledge Documentation**: Create or update knowledge base articles with current best practices, including:
+     - Key concepts and principles
+     - Implementation patterns and examples
+     - Common pitfalls and solutions
+     - Industry standards and references
+     - Last updated date
+   - **Foundation Building**: Use this researched knowledge as the foundation for all subsequent technical decisions
+
+2. **Technical Analysis**
+   - Review requirements thoroughly using researched knowledge
+   - Identify technical components based on best practices
    - Consider platform differences (iOS/Android/Web)
    - Analyze existing codebase for reusable components
 
-2. **Architecture Design**
-   - Define component structure
-   - Plan data flow
+3. **Architecture Design**
+   - Define component structure using proven patterns
+   - Plan data flow based on researched best practices
    - Identify core vs platform-specific code
 
-3. **User Story Creation**
+4. **User Story Creation**
    - Update user stories with technical information following proven patterns
    - **Include ONE clear proof-of-concept test** that validates the setup works
    - Use real project code in examples, not theoretical scenarios
@@ -94,6 +106,21 @@ As a Technical Architect, I design systems that are robust, scalable, and mainta
 - Specify performance requirements and constraints
 - Define security considerations upfront
 - Include deployment and infrastructure requirements
+
+### REST API Design Standards
+- **Resource-Based URLs**: Use nouns, never verbs (e.g., `/api/users`, not `/api/getUsers`)
+- **HTTP Method Semantics**:
+  - `GET` - Retrieve resources (read-only, no side effects)
+  - `POST` - Create new resources
+  - `PUT` - Replace entire resource (complete representation required)
+  - `PATCH` - Partial updates (modify specific fields)
+  - `DELETE` - Remove resources
+- **URL Structure**: `/api/{resource}/{id}/{sub-resource}`
+- **Status Codes**: Use appropriate HTTP status codes (200, 201, 400, 404, 409, 500)
+- **Consistent Naming**: Use kebab-case for URLs, camelCase for JSON fields
+- **Resource Relationships**: Use sub-resources for nested data (`/api/users/123/orders`)
+- **Query Parameters**: Use for filtering, sorting, pagination (`?status=active&sort=name`)
+- **Avoid Actions in URLs**: Use HTTP methods to represent actions, not URL paths
 
 ## Templates
 
