@@ -3,7 +3,7 @@ import Database from 'better-sqlite3';
 /**
  * Schema version information
  */
-export const CURRENT_SCHEMA_VERSION = 1;
+export const CURRENT_SCHEMA_VERSION = 2;
 
 /**
  * Migration interface
@@ -79,6 +79,28 @@ const migrations: Migration[] = [
       'DROP TABLE IF EXISTS agents', 
       'DROP TABLE IF EXISTS work_items',
       'DROP TABLE IF EXISTS schema_version'
+    ]
+  },
+  {
+    version: 2,
+    name: 'add_scheduler_config',
+    up: [
+      // Scheduler Configuration Table
+      `CREATE TABLE scheduler_config (
+        id INTEGER PRIMARY KEY CHECK (id = 1), -- Singleton table
+        is_running BOOLEAN NOT NULL DEFAULT 0,
+        interval_seconds INTEGER NOT NULL DEFAULT 5,
+        last_run_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`,
+      
+      // Insert default configuration (scheduler off by default)
+      `INSERT INTO scheduler_config (id, is_running, interval_seconds) 
+       VALUES (1, 0, 5)`
+    ],
+    down: [
+      'DROP TABLE IF EXISTS scheduler_config'
     ]
   }
 ];

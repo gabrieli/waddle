@@ -13,10 +13,17 @@ export interface WorkItemService {
   assign(workItemId: number, agentId: number): Promise<boolean>;
 }
 
+export interface SchedulerConfigRepository {
+  get(): { isRunning: boolean; intervalSeconds: number };
+  setRunning(isRunning: boolean): void;
+  updateLastRun(): void;
+}
+
 export interface SchedulerDependencies {
   agentService: AgentService;
   workItemService: WorkItemService;
   assignmentRules: AssignmentRule[];
+  configRepository: SchedulerConfigRepository;
 }
 
 export interface Scheduler {
@@ -33,6 +40,9 @@ export function createScheduler(deps: SchedulerDependencies): Scheduler {
 
   const runAssignmentCycle = async (): Promise<void> => {
     try {
+      // Update last run time
+      deps.configRepository.updateLastRun();
+      
       // Phase 1: Query available resources
       const [agents, work] = await Promise.all([
         deps.agentService.getAvailable(),
@@ -58,8 +68,15 @@ export function createScheduler(deps: SchedulerDependencies): Scheduler {
   const start = (): void => {
     if (intervalId) return;
     
-    console.log(`[${new Date().toISOString()}] Scheduler: Starting (5 second intervals)`);
-    intervalId = setInterval(runAssignmentCycle, 5000);
+    // Get configuration from database
+    const config = deps.configRepository.get();
+    const intervalMs = config.intervalSeconds * 1000;
+    
+    // Update database to reflect running state
+    deps.configRepository.setRunning(true);
+    
+    console.log(`[${new Date().toISOString()}] Scheduler: Starting (${config.intervalSeconds} second intervals)`);
+    intervalId = setInterval(runAssignmentCycle, intervalMs);
     
     // Run immediately on start
     runAssignmentCycle();
@@ -69,9 +86,16 @@ export function createScheduler(deps: SchedulerDependencies): Scheduler {
     if (intervalId) {
       clearInterval(intervalId);
       intervalId = null;
+      
+      // Update database to reflect stopped state
+      deps.configRepository.setRunning(false);
+      
       console.log(`[${new Date().toISOString()}] Scheduler: Stopped`);
     }
   };
+
+  // Initialize but don't auto-start (as per requirement)
+  // Scheduler starts OFF by default per user requirement
 
   return {
     runAssignmentCycle,

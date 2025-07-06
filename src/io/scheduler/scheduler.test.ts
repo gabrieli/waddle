@@ -17,7 +17,12 @@ describe('Scheduler Integration', () => {
       },
       assignmentRules: [
         { agentType: 'developer', workType: 'user_story', workStatus: 'new' }
-      ]
+      ],
+      configRepository: {
+        get: () => ({ isRunning: false, intervalSeconds: 5 }),
+        setRunning: (isRunning: boolean) => {},
+        updateLastRun: () => {}
+      }
     };
 
     const scheduler = createScheduler(mockDependencies);
@@ -40,12 +45,73 @@ describe('Scheduler Integration', () => {
       },
       assignmentRules: [
         { agentType: 'developer', workType: 'user_story', workStatus: 'new' }
-      ]
+      ],
+      configRepository: {
+        get: () => ({ isRunning: false, intervalSeconds: 5 }),
+        setRunning: (isRunning: boolean) => {},
+        updateLastRun: () => {}
+      }
     };
 
     const scheduler = createScheduler(mockDependencies);
     await scheduler.runAssignmentCycle();
     
     assert.strictEqual(assignmentMade, true);
+  });
+
+  test('should update database when started', () => {
+    let dbUpdated = false;
+    
+    const mockDependencies: SchedulerDependencies = {
+      agentService: {
+        getAvailable: async () => []
+      },
+      workItemService: {
+        getAssignable: async () => [],
+        assign: async () => true
+      },
+      assignmentRules: [],
+      configRepository: {
+        get: () => ({ isRunning: false, intervalSeconds: 5 }),
+        setRunning: (isRunning: boolean) => {
+          if (isRunning === true) dbUpdated = true;
+        },
+        updateLastRun: () => {}
+      }
+    };
+
+    const scheduler = createScheduler(mockDependencies);
+    scheduler.start();
+    scheduler.stop(); // Clean up interval
+    
+    assert.strictEqual(dbUpdated, true);
+  });
+
+  test('should update database when stopped', () => {
+    let dbUpdated = false;
+    
+    const mockDependencies: SchedulerDependencies = {
+      agentService: {
+        getAvailable: async () => []
+      },
+      workItemService: {
+        getAssignable: async () => [],
+        assign: async () => true
+      },
+      assignmentRules: [],
+      configRepository: {
+        get: () => ({ isRunning: true, intervalSeconds: 5 }),
+        setRunning: (isRunning: boolean) => {
+          if (isRunning === false) dbUpdated = true;
+        },
+        updateLastRun: () => {}
+      }
+    };
+
+    const scheduler = createScheduler(mockDependencies);
+    scheduler.start();
+    scheduler.stop();
+    
+    assert.strictEqual(dbUpdated, true);
   });
 });
