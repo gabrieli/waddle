@@ -3,7 +3,7 @@ import Database from 'better-sqlite3';
 /**
  * Schema version information
  */
-export const CURRENT_SCHEMA_VERSION = 2;
+export const CURRENT_SCHEMA_VERSION = 3;
 
 /**
  * Migration interface
@@ -101,6 +101,30 @@ const migrations: Migration[] = [
     ],
     down: [
       'DROP TABLE IF EXISTS scheduler_config'
+    ]
+  },
+  {
+    version: 3,
+    name: 'add_tasks_table',
+    up: [
+      // Tasks Table
+      `CREATE TABLE tasks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_story_id INTEGER NOT NULL,
+        parent_task_id INTEGER,
+        type TEXT NOT NULL CHECK (type IN ('development', 'testing', 'review')),
+        status TEXT NOT NULL CHECK (status IN ('new', 'in_progress', 'done')),
+        summary TEXT,
+        metadata TEXT, -- JSON stored as text
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        started_at TIMESTAMP,
+        completed_at TIMESTAMP,
+        FOREIGN KEY (user_story_id) REFERENCES work_items(id),
+        FOREIGN KEY (parent_task_id) REFERENCES tasks(id)
+      )`
+    ],
+    down: [
+      'DROP TABLE IF EXISTS tasks'
     ]
   }
 ];
