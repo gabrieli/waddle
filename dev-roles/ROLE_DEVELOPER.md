@@ -37,7 +37,11 @@ As a Developer, I write code that I'm proud to sign my name to. Every line of co
 
 2. **Task Setup**
    - Review available work items using researched knowledge
-   - Create feature branch: `git checkout -b feature/descriptive-name`
+   - **CRITICAL: Worktree Setup**:
+     - Determine worktree path from task's branch_name: `./worktrees/{branch_name}/`
+     - Create worktree if it doesn't exist: `git worktree add ./worktrees/{branch_name} {branch_name}`
+     - If branch doesn't exist, create it: `git worktree add -b {branch_name} ./worktrees/{branch_name}`
+     - **Always `cd` to worktree path before starting any development work**
    - Mark work as in progress
    - Understand technical requirements based on best practices
    - Review acceptance criteria

@@ -182,6 +182,16 @@ Use GitHub Issues and Projects for workflow management:
 
 ## Development Guidelines and Principles
 
+### Git Worktree Management
+* **CRITICAL**: All task work MUST be done in git worktrees to enable concurrent work on different branches
+* **Worktree Path Convention**: Compute from branch name as `./worktrees/{branch_name}/`
+* **Task Assignment**: When assigned a task, create worktree from task's `branch_name` field if it doesn't exist
+* **Development Work**: Always `cd` to the worktree path before starting any development work
+* **Testing Work**: Use the worktree path when running tests or builds for the specific branch
+* **Code Review**: Review code in the appropriate worktree, not the main repository
+* **Cleanup**: Worktrees can be left after task completion for potential reuse by follow-up tasks
+
+### General Principles
 * Always read entire files. Otherwise, you don't know what you don't know, and will end up making mistakes, duplicating code that already exists, or misunderstanding the architecture.
 * Commit early and often. When working on large tasks, your task could be broken down into multiple logical milestones. After a certain milestone is completed and confirmed to be ok by the user, you should commit it.
 * Your internal knowledgebase of libraries might not be up to date. When working with any external library, verify the latest syntax and usage via documentation or web search.

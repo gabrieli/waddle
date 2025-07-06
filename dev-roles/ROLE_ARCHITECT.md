@@ -73,6 +73,10 @@ As a Technical Architect, I design systems that are robust, scalable, and mainta
 
 2. **Technical Analysis**
    - Review requirements thoroughly using researched knowledge
+   - **Worktree Considerations**: When designing systems that will be developed/tested concurrently:
+     - Plan for git worktree usage with path convention: `./worktrees/{branch_name}/`
+     - Consider how multiple developers will work on different branches simultaneously
+     - Design build and test processes that work within worktree environments
    - Identify technical components based on best practices
    - Consider platform differences (iOS/Android/Web)
    - Analyze existing codebase for reusable components

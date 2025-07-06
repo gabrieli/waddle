@@ -1,5 +1,9 @@
 /**
  * Task Service Implementation
+ * 
+ * Note: Tasks include branch_name field for git worktree management.
+ * Worktree paths should be computed from branch_name as: ./worktrees/{branch_name}/
+ * This enables concurrent work on different branches on the same machine.
  */
 import Database from 'better-sqlite3';
 import type { TaskService } from '../http/routes/tasks.ts';
