@@ -3,6 +3,117 @@ import express from 'express';
 import { getDatabase } from '../db/index.ts';
 import { initializeAgentsOnStartup } from '../startup/agent-initialization.ts';
 
+// Global scheduler instance
+let schedulerInterval = null;
+
+// Scheduler logic with comprehensive logging
+const runSchedulerCycle = async () => {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] 🔄 Scheduler: Starting assignment cycle...`);
+  
+  try {
+    const db = getDatabase();
+    
+    // Update last run time
+    db.prepare('UPDATE scheduler_config SET last_run_at = CURRENT_TIMESTAMP WHERE id = 1').run();
+    
+    // 1. Get available agents (those without work_item_id)
+    const availableAgents = db.prepare('SELECT id, type FROM agents WHERE work_item_id IS NULL').all();
+    console.log(`[${timestamp}] 👥 Available agents: ${availableAgents.length}`, 
+      availableAgents.map(a => `${a.type}(${a.id})`));
+    
+    // 2. Get assignable work items
+    const assignableWork = db.prepare(`
+      SELECT id, name, type, status 
+      FROM work_items 
+      WHERE status = 'new' AND agent_id IS NULL
+    `).all();
+    console.log(`[${timestamp}] 📋 Assignable work: ${assignableWork.length}`, 
+      assignableWork.map(w => `${w.type}:${w.id}`));
+    
+    let assignments = 0;
+    
+    // 3. Assignment rules and matching
+    for (const agent of availableAgents) {
+      // Find work that matches this agent type
+      let workItem = null;
+      
+      if (agent.type === 'architect') {
+        workItem = assignableWork.find(w => w.type === 'epic' && w.status === 'new');
+      } else if (agent.type === 'developer') {
+        workItem = assignableWork.find(w => w.type === 'user_story' && w.status === 'new');
+      } else if (agent.type === 'tester') {
+        workItem = assignableWork.find(w => w.type === 'user_story' && w.status === 'review');
+      }
+      
+      if (workItem) {
+        // Make assignment
+        try {
+          db.prepare(`
+            UPDATE work_items 
+            SET agent_id = ?, status = 'in_progress', started_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+          `).run(agent.id, workItem.id);
+          
+          db.prepare(`
+            UPDATE agents 
+            SET work_item_id = ?, version = version + 1
+            WHERE id = ?
+          `).run(workItem.id, agent.id);
+          
+          console.log(`[${timestamp}] ✅ Assignment: ${agent.type}(${agent.id}) ← ${workItem.type}(${workItem.id}) "${workItem.name}"`);
+          assignments++;
+          
+          // Remove from available lists to prevent double assignment
+          const agentIndex = availableAgents.findIndex(a => a.id === agent.id);
+          if (agentIndex > -1) availableAgents.splice(agentIndex, 1);
+          
+          const workIndex = assignableWork.findIndex(w => w.id === workItem.id);
+          if (workIndex > -1) assignableWork.splice(workIndex, 1);
+          
+        } catch (error) {
+          console.error(`[${timestamp}] ❌ Assignment failed: ${agent.type}(${agent.id}) ← ${workItem.type}(${workItem.id}):`, error.message);
+        }
+      }
+    }
+    
+    if (assignments === 0) {
+      console.log(`[${timestamp}] 😴 No assignments made - no matching work/agents available`);
+    } else {
+      console.log(`[${timestamp}] 🎯 Scheduler cycle complete: ${assignments} assignments made`);
+    }
+    
+  } catch (error) {
+    console.error(`[${timestamp}] ❌ Scheduler error:`, error.message);
+  }
+};
+
+const startScheduler = () => {
+  if (schedulerInterval) {
+    console.log(`[${new Date().toISOString()}] ⚠️  Scheduler already running`);
+    return false;
+  }
+  
+  console.log(`[${new Date().toISOString()}] 🚀 Starting scheduler (5 second intervals)`);
+  schedulerInterval = setInterval(runSchedulerCycle, 5000);
+  
+  // Run immediately
+  runSchedulerCycle();
+  return true;
+};
+
+const stopScheduler = () => {
+  if (!schedulerInterval) {
+    console.log(`[${new Date().toISOString()}] ⚠️  Scheduler not running`);
+    return false;
+  }
+  
+  clearInterval(schedulerInterval);
+  schedulerInterval = null;
+  console.log(`[${new Date().toISOString()}] 🛑 Scheduler stopped`);
+  return true;
+};
+
 // Command handlers as pure functions
 const getStatus = async () => ({
   status: 'running',
@@ -227,9 +338,14 @@ app.get('/api/scheduler/status', async (req, res) => {
 app.post('/api/scheduler/start', async (req, res) => {
   try {
     const db = getDatabase();
-    db.prepare('UPDATE scheduler_config SET is_running = 1, updated_at = CURRENT_TIMESTAMP WHERE id = 1').run();
-    console.log(`[${new Date().toISOString()}] Scheduler started via API`);
-    res.json({ success: true, result: true });
+    const started = startScheduler();
+    if (started) {
+      db.prepare('UPDATE scheduler_config SET is_running = 1, updated_at = CURRENT_TIMESTAMP WHERE id = 1').run();
+      console.log(`[${new Date().toISOString()}] 🚀 Scheduler started via API`);
+      res.json({ success: true, result: true });
+    } else {
+      res.json({ success: true, result: false, message: 'Scheduler already running' });
+    }
   } catch (error) {
     console.error(`[${new Date().toISOString()}] Error starting scheduler:`, error.message);
     res.status(500).json({ success: false, error: error.message });
@@ -239,9 +355,14 @@ app.post('/api/scheduler/start', async (req, res) => {
 app.post('/api/scheduler/stop', async (req, res) => {
   try {
     const db = getDatabase();
-    db.prepare('UPDATE scheduler_config SET is_running = 0, updated_at = CURRENT_TIMESTAMP WHERE id = 1').run();
-    console.log(`[${new Date().toISOString()}] Scheduler stopped via API`);
-    res.json({ success: true, result: true });
+    const stopped = stopScheduler();
+    if (stopped) {
+      db.prepare('UPDATE scheduler_config SET is_running = 0, updated_at = CURRENT_TIMESTAMP WHERE id = 1').run();
+      console.log(`[${new Date().toISOString()}] 🛑 Scheduler stopped via API`);
+      res.json({ success: true, result: true });
+    } else {
+      res.json({ success: true, result: false, message: 'Scheduler not running' });
+    }
   } catch (error) {
     console.error(`[${new Date().toISOString()}] Error stopping scheduler:`, error.message);
     res.status(500).json({ success: false, error: error.message });
@@ -267,6 +388,14 @@ const server = app.listen(PORT, async () => {
 // Graceful shutdown
 const shutdown = (signal) => {
   console.log(`\n[${new Date().toISOString()}] ${signal} received, shutting down...`);
+  
+  // Stop scheduler if running
+  if (schedulerInterval) {
+    stopScheduler();
+    const db = getDatabase();
+    db.prepare('UPDATE scheduler_config SET is_running = 0, updated_at = CURRENT_TIMESTAMP WHERE id = 1').run();
+  }
+  
   server.close(() => {
     console.log(`[${new Date().toISOString()}] Server closed`);
     process.exit(0);
