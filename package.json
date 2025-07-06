@@ -3,10 +3,10 @@
   "version": "0.0.1",
   "type": "module",
   "description": "HTTP server with CLI client for commands",
-  "main": "src/server/index.js",
+  "main": "src/io/http/index.js",
   "scripts": {
-    "start": "node src/server/index.js",
-    "dev": "node --watch src/server/index.js",
+    "start": "node src/io/http/index.js",
+    "dev": "node --watch src/io/http/index.js",
     "cli": "node src/cli-client.js",
     "status": "node src/cli-client.js status",
     "echo": "node src/cli-client.js echo",
