@@ -12,10 +12,12 @@ src/
 │   ├── agents/        # Agent prompt preparation and orchestration
 │   ├── workflows/     # Pure workflow orchestration
 │   ├── domain/        # Domain models and business rules
+│   ├── repositories/  # Repository interfaces (when needed)
 │   └── validation/    # Input validation logic
 ├── io/                # All side effects
 │   ├── clients/       # External API clients (Claude, GitHub, etc.)
-│   ├── db/            # Database operations
+│   ├── db/            # Database infrastructure (connection, migrations, config)
+│   ├── repositories/  # Data persistence implementations (when needed)
 │   ├── http/          # HTTP server and routes
 │   ├── fs/            # File system operations
 │   └── config/        # Configuration management
@@ -74,6 +76,38 @@ export async function executeAgentTask(prompt: Prompt): Promise<AgentResult> {
   return response;
 }
 ```
+
+### Repository Pattern (Future)
+When the need arises for data persistence beyond simple database setup:
+
+**Core Layer** defines repository interfaces:
+```typescript
+// src/core/repositories/work-item-repository.ts
+export interface WorkItemRepository {
+  findById(id: number): Promise<WorkItem | null>;
+  findAssignable(type: WorkItemType, status: WorkItemStatus): Promise<WorkItem[]>;
+  create(workItem: CreateWorkItemRequest): Promise<WorkItem>;
+  assign(id: number, agentId: number, version: number): Promise<boolean>;
+}
+```
+
+**IO Layer** implements concrete repositories:
+```typescript
+// src/io/repositories/sqlite-work-item-repository.ts
+export class SQLiteWorkItemRepository implements WorkItemRepository {
+  constructor(private db: Database) {}
+  
+  async findById(id: number): Promise<WorkItem | null> {
+    // SQLite-specific query implementation
+  }
+  // ... other methods
+}
+```
+
+**Current State**: 
+- `src/io/db/` contains database infrastructure (connection, migrations)
+- Repository pattern will be added when query complexity justifies it
+- Keep it simple until the need is clear
 
 ### Lib Layer (`src/lib/`)
 Shared utilities and foundational code:
