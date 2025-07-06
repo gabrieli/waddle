@@ -17,27 +17,28 @@ export function isValidAgentType(type: string): type is 'developer' | 'architect
   return ['developer', 'architect', 'tester'].includes(type);
 }
 
-// Pure database operation functions
-export function clearAllAgents(db: Database.Database): number {
+// Curried database operation functions
+export const clearAllAgents = (db: Database.Database) => (): number => {
   const result = db.prepare('DELETE FROM agents').run();
   return result.changes;
-}
+};
 
-export function createAgent(db: Database.Database, type: 'developer' | 'architect' | 'tester'): number {
-  if (!isValidAgentType(type)) {
-    throw new Error(`Invalid agent type: ${type}`);
-  }
+export const createAgent = (db: Database.Database) => 
+  (type: 'developer' | 'architect' | 'tester'): number => {
+    if (!isValidAgentType(type)) {
+      throw new Error(`Invalid agent type: ${type}`);
+    }
 
-  const stmt = db.prepare(`
-    INSERT INTO agents (type, version) 
-    VALUES (?, 1)
-  `);
-  
-  const result = stmt.run(type);
-  return result.lastInsertRowid as number;
-}
+    const stmt = db.prepare(`
+      INSERT INTO agents (type, version) 
+      VALUES (?, 1)
+    `);
+    
+    const result = stmt.run(type);
+    return result.lastInsertRowid as number;
+  };
 
-export function clearWorkItemAssignments(db: Database.Database): number {
+export const clearWorkItemAssignments = (db: Database.Database) => (): number => {
   const stmt = db.prepare(`
     UPDATE work_items 
     SET agent_id = NULL, started_at = NULL 
@@ -46,16 +47,26 @@ export function clearWorkItemAssignments(db: Database.Database): number {
   
   const result = stmt.run();
   return result.changes;
+};
+
+// Create agent operations with curried database dependency
+export function createAgentOperations(db: Database.Database) {
+  return {
+    clearAll: clearAllAgents(db),
+    create: createAgent(db),
+    clearWorkItems: clearWorkItemAssignments(db)
+  };
 }
 
-// Functional repository implementation - composing smaller functions
+// Functional repository implementation using curried operations
 export function createFunctionalAgentRepository(database?: Database.Database): AgentRepository {
   const db = database || getDatabase();
+  const ops = createAgentOperations(db);
   
   return {
-    clearAll: async (): Promise<number> => clearAllAgents(db),
-    create: async (type: 'developer' | 'architect' | 'tester'): Promise<number> => createAgent(db, type),
-    clearWorkItemAssignments: async (): Promise<number> => clearWorkItemAssignments(db)
+    clearAll: async (): Promise<number> => ops.clearAll(),
+    create: async (type: 'developer' | 'architect' | 'tester'): Promise<number> => ops.create(type),
+    clearWorkItemAssignments: async (): Promise<number> => ops.clearWorkItems()
   };
 }
 
