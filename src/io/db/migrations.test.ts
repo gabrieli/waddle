@@ -70,6 +70,7 @@ describe('Database Migrations', () => {
       assert(columnNames.includes('started_at'));
       assert(columnNames.includes('completed_at'));
       assert(columnNames.includes('metadata'));
+      assert(columnNames.includes('branch_name'));
     });
 
     it('should enforce task type constraints', () => {

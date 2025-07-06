@@ -29,8 +29,8 @@ describe('Tasks API Routes', () => {
     `).run();
     
     db.prepare(`
-      INSERT INTO tasks (id, user_story_id, type, status) 
-      VALUES (1, 1, 'development', 'new')
+      INSERT INTO tasks (id, user_story_id, type, status, branch_name) 
+      VALUES (1, 1, 'development', 'new', 'feature/test-branch')
     `).run();
 
     // Create mock service
@@ -81,11 +81,11 @@ describe('Tasks API Routes', () => {
           throw new Error('Parent task not found');
         }
         
-        // Create next task
+        // Create next task (inherit branch_name from parent)
         const result = db.prepare(`
-          INSERT INTO tasks (user_story_id, parent_task_id, type, status, created_at)
-          VALUES (?, ?, ?, 'new', CURRENT_TIMESTAMP)
-        `).run(parentTask.user_story_id, parentTaskId, type);
+          INSERT INTO tasks (user_story_id, parent_task_id, type, status, branch_name, created_at)
+          VALUES (?, ?, ?, 'new', ?, CURRENT_TIMESTAMP)
+        `).run(parentTask.user_story_id, parentTaskId, type, parentTask.branch_name);
         
         return {
           success: true,
@@ -189,6 +189,21 @@ describe('Tasks API Routes', () => {
       } catch (error) {
         assert.strictEqual(error.message, 'Parent task not found');
       }
+    });
+
+    test('should inherit branch_name from parent task', async () => {
+      // Complete the parent task first
+      await mockService.completeTask(1, 'Task completed');
+      
+      // Create next task
+      const result = await mockService.createNextTask(1, 'testing');
+      
+      // Verify branch inheritance
+      const nextTask = db.prepare('SELECT * FROM tasks WHERE id = ?').get(result.taskId) as any;
+      const parentTask = db.prepare('SELECT * FROM tasks WHERE id = 1').get() as any;
+      
+      assert.strictEqual(nextTask.branch_name, parentTask.branch_name);
+      assert.strictEqual(nextTask.branch_name, 'feature/test-branch');
     });
   });
 });

@@ -31,6 +31,7 @@ export interface Task {
   status: TaskStatus;
   summary?: string;
   metadata?: Record<string, any>;
+  branch_name?: string;
   created_at: Date;
   started_at?: Date;
   completed_at?: Date;
@@ -69,6 +70,7 @@ export function createTask(params: {
   parent_task_id?: number;
   summary?: string;
   metadata?: Record<string, any>;
+  branch_name?: string;
 }): Task {
   if (!isValidTaskType(params.type)) {
     throw new Error(`Invalid task type: ${params.type}`);
@@ -81,6 +83,7 @@ export function createTask(params: {
     parent_task_id: params.parent_task_id,
     summary: params.summary,
     metadata: params.metadata,
+    branch_name: params.branch_name,
     created_at: new Date()
   };
 }

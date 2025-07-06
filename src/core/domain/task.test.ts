@@ -75,11 +75,23 @@ describe('Task Domain', () => {
         type: 'review',
         parent_task_id: 10,
         summary: 'Test summary',
-        metadata
+        metadata,
+        branch_name: 'feature/test-branch'
       });
 
       assert.strictEqual(task.summary, 'Test summary');
       assert.deepStrictEqual(task.metadata, metadata);
+      assert.strictEqual(task.branch_name, 'feature/test-branch');
+    });
+
+    it('createTask should support branch_name', () => {
+      const task = createTask({
+        user_story_id: 1,
+        type: 'development',
+        branch_name: 'feature/us-002-task-assignment'
+      });
+
+      assert.strictEqual(task.branch_name, 'feature/us-002-task-assignment');
     });
   });
 

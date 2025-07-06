@@ -3,7 +3,7 @@ import Database from 'better-sqlite3';
 /**
  * Schema version information
  */
-export const CURRENT_SCHEMA_VERSION = 3;
+export const CURRENT_SCHEMA_VERSION = 4;
 
 /**
  * Migration interface
@@ -125,6 +125,19 @@ const migrations: Migration[] = [
     ],
     down: [
       'DROP TABLE IF EXISTS tasks'
+    ]
+  },
+  {
+    version: 4,
+    name: 'add_branch_name_to_tasks',
+    up: [
+      // Add branch_name column to tasks table
+      `ALTER TABLE tasks ADD COLUMN branch_name TEXT`
+    ],
+    down: [
+      // SQLite doesn't support DROP COLUMN, so we'd need to recreate the table
+      // For now, we'll leave this as a comment since it's complex
+      '-- Cannot easily drop column in SQLite'
     ]
   }
 ];

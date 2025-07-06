@@ -85,13 +85,13 @@ export function createTaskService(db: Database.Database): TaskService {
         throw new Error(`Invalid task type: ${type}. Must be one of: ${validTypes.join(', ')}`);
       }
       
-      // Create next task
+      // Create next task (inherit branch_name from parent)
       const insertTask = db.prepare(`
-        INSERT INTO tasks (user_story_id, parent_task_id, type, status, created_at)
-        VALUES (?, ?, ?, 'new', CURRENT_TIMESTAMP)
+        INSERT INTO tasks (user_story_id, parent_task_id, type, status, branch_name, created_at)
+        VALUES (?, ?, ?, 'new', ?, CURRENT_TIMESTAMP)
       `);
       
-      const result = insertTask.run(parentTask.user_story_id, parentTaskId, type);
+      const result = insertTask.run(parentTask.user_story_id, parentTaskId, type, parentTask.branch_name);
       
       return {
         success: true,
