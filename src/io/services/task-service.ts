@@ -10,16 +10,12 @@ import type { TaskService } from '../http/routes/tasks.ts';
 
 export function createTaskService(db: Database.Database): TaskService {
   return {
-    async assignTaskToAgent(taskId: number, agentId: number) {
-      // Check if task and agent exist
+    async assignTaskToAgent(taskId: number, agentId?: number) {
+      // Check if task exists
       const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(taskId);
-      const agent = db.prepare('SELECT * FROM agents WHERE id = ?').get(agentId);
       
       if (!task) {
         throw new Error('Task not found');
-      }
-      if (!agent) {
-        throw new Error('Agent not found');
       }
       
       if (task.status !== 'new') {
@@ -27,6 +23,7 @@ export function createTaskService(db: Database.Database): TaskService {
       }
       
       // Update task status to in_progress and set started_at
+      // Ignore agents table - manual assignment just marks task as in progress
       const updateTask = db.prepare(`
         UPDATE tasks 
         SET status = 'in_progress', started_at = CURRENT_TIMESTAMP 
@@ -38,7 +35,7 @@ export function createTaskService(db: Database.Database): TaskService {
       return {
         success: true,
         taskId,
-        agentId,
+        agentId: agentId || null,
         status: 'in_progress'
       };
     },

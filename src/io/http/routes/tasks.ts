@@ -4,10 +4,10 @@
 import { Router } from 'express';
 
 export interface TaskService {
-  assignTaskToAgent(taskId: number, agentId: number): Promise<{
+  assignTaskToAgent(taskId: number, agentId?: number): Promise<{
     success: boolean;
     taskId: number;
-    agentId: number;
+    agentId: number | null;
     status: string;
   }>;
   
@@ -34,10 +34,10 @@ export function createTasksRouter(service: TaskService): Router {
       const taskId = parseInt(req.params.taskId);
       const { agentId } = req.body;
 
-      if (!taskId || !agentId) {
+      if (!taskId) {
         return res.status(400).json({
           success: false,
-          error: 'taskId and agentId are required'
+          error: 'taskId is required'
         });
       }
 
