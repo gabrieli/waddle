@@ -169,24 +169,46 @@ const result = withDeps(userData) // Only need to pass data
 
 ## Common Patterns in Repository Layer
 
-### Repository Operations
+### Clean Repository API Design
 ```typescript
-const createRepositoryOperations = (db: Database) => ({
-  // Simple operations
-  clearAll: (table: string) => () => 
-    db.prepare(`DELETE FROM ${table}`).run().changes,
-    
-  // Parameterized operations  
-  create: (table: string) => (data: Record<string, any>) =>
-    db.prepare(`INSERT INTO ${table} ...`).run(data).lastInsertRowid,
-    
-  // Complex operations with validation
-  createWithValidation: (table: string) => (validator: (data: any) => boolean) => 
-    (data: Record<string, any>) => {
-      if (!validator(data)) throw new Error('Invalid data')
-      return db.prepare(`INSERT INTO ${table} ...`).run(data).lastInsertRowid
-    }
-})
+// ❌ Avoid: Over-exposing internal functions
+export const clearAllAgents = (db: Database) => () => number
+export const createAgent = (db: Database) => (type: AgentType) => number
+export const createAgentOperations = (db: Database) => AgentOps
+export const createFunctionalRepository = (db?: Database) => Repository
+export const createAgentRepository = (db?: Database) => Repository // redundant!
+
+// ✅ Better: Clean public API with internal currying
+export function createAgentRepository(db?: Database): Repository {
+  // Internal curried operations (not exported)
+  const clearAll = (db: Database) => (): number => /* ... */
+  const create = (db: Database) => (type: AgentType): number => /* ... */
+  
+  const ops = {
+    clearAll: clearAll(db),
+    create: create(db)
+  }
+  
+  return {
+    clearAll: async () => ops.clearAll(),
+    create: async (type) => ops.create(type)
+  }
+}
 ```
 
-This approach makes the repository layer highly composable and testable while maintaining clean separation of concerns.
+### Repository Export Strategy
+```typescript
+// Export only what consumers need:
+// 1. Main factory function
+export function createAgentRepository(database?: Database): AgentRepository
+
+// 2. Pure utility functions (for testing/reuse)
+export function isValidAgentType(type: string): type is AgentType
+
+// Keep internal implementation details private:
+// - Curried database operations
+// - Intermediate composition functions
+// - Implementation-specific helpers
+```
+
+This approach makes the repository layer highly composable and testable while maintaining clean separation of concerns and avoiding API bloat.
