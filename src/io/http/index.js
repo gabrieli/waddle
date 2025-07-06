@@ -205,6 +205,49 @@ app.patch('/api/work-items/assignments', async (req, res) => {
   }
 });
 
+// Scheduler endpoints that actually control the scheduler
+app.get('/api/scheduler/status', async (req, res) => {
+  try {
+    const db = getDatabase();
+    const config = db.prepare('SELECT is_running, interval_seconds, last_run_at FROM scheduler_config WHERE id = 1').get();
+    res.json({ 
+      success: true, 
+      result: {
+        isRunning: Boolean(config.is_running),
+        intervalSeconds: config.interval_seconds,
+        lastRunAt: config.last_run_at
+      }
+    });
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] Error getting scheduler status:`, error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/scheduler/start', async (req, res) => {
+  try {
+    const db = getDatabase();
+    db.prepare('UPDATE scheduler_config SET is_running = 1, updated_at = CURRENT_TIMESTAMP WHERE id = 1').run();
+    console.log(`[${new Date().toISOString()}] Scheduler started via API`);
+    res.json({ success: true, result: true });
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] Error starting scheduler:`, error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/scheduler/stop', async (req, res) => {
+  try {
+    const db = getDatabase();
+    db.prepare('UPDATE scheduler_config SET is_running = 0, updated_at = CURRENT_TIMESTAMP WHERE id = 1').run();
+    console.log(`[${new Date().toISOString()}] Scheduler stopped via API`);
+    res.json({ success: true, result: true });
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] Error stopping scheduler:`, error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Start server
 const PORT = process.env.PORT || 3000;
 const server = app.listen(PORT, async () => {
