@@ -4,14 +4,14 @@
 
 export type AgentType = 'developer' | 'architect' | 'tester';
 
-export interface HttpClient {
-  delete(url: string): Promise<{ success: boolean }>;
-  post(url: string, data: any): Promise<{ success: boolean; id?: number }>;
-  patch(url: string, data: any): Promise<{ success: boolean }>;
+export interface AgentRepository {
+  clearAll(): Promise<number>;
+  create(type: AgentType): Promise<number>;
+  clearWorkItemAssignments(): Promise<number>;
 }
 
 export interface AgentInitializationConfig {
-  httpClient: HttpClient;
+  agentRepository: AgentRepository;
   agentTypes: AgentType[];
 }
 
@@ -32,20 +32,17 @@ export interface AgentInitializationResult {
 export async function initializeAgents(config: AgentInitializationConfig): Promise<AgentInitializationResult> {
   try {
     // Step 1: Clear all existing agents
-    await config.httpClient.delete('/api/agents');
+    const deletedCount = await config.agentRepository.clearAll();
 
     // Step 2: Create new agents
     let agentsCreated = 0;
     for (const agentType of config.agentTypes) {
-      await config.httpClient.post('/api/agents', { type: agentType });
+      await config.agentRepository.create(agentType);
       agentsCreated++;
     }
 
     // Step 3: Reset interrupted work items
-    await config.httpClient.patch('/api/work-items/assignments', {
-      agent_id: null,
-      started_at: null
-    });
+    const updatedWorkItems = await config.agentRepository.clearWorkItemAssignments();
 
     return {
       success: true,

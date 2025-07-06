@@ -214,9 +214,7 @@ const server = app.listen(PORT, async () => {
   
   // Initialize agents on startup
   try {
-    await initializeAgentsOnStartup({
-      serverBaseUrl: `http://localhost:${PORT}`
-    });
+    await initializeAgentsOnStartup();
   } catch (error) {
     console.error(`[${new Date().toISOString()}] Failed to initialize agents:`, error.message);
     // Don't exit the server, but log the error

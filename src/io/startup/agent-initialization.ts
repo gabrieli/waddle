@@ -4,33 +4,29 @@
  */
 
 import * as AgentInit from '../../core/workflows/agent-initialization.ts';
-import { createHttpClient } from '../http/agent-client.ts';
+import { createAgentRepository } from '../repositories/agent-repository.ts';
 
 /**
  * Startup configuration
  */
 export interface StartupConfig {
-  serverBaseUrl: string;
-  httpTimeout?: number;
+  // No external dependencies needed for repository pattern
 }
 
 /**
  * Initialize agents during server startup
  */
-export async function initializeAgentsOnStartup(config: StartupConfig): Promise<void> {
+export async function initializeAgentsOnStartup(config?: StartupConfig): Promise<void> {
   const startTime = Date.now();
   console.log(`[${new Date().toISOString()}] Starting agent initialization...`);
 
   try {
-    // Create HTTP client
-    const httpClient = createHttpClient({
-      baseUrl: config.serverBaseUrl,
-      timeout: config.httpTimeout || 10000
-    });
+    // Create agent repository for direct database access
+    const agentRepository = createAgentRepository();
 
     // Initialize agents
     const result = await AgentInit.initializeAgents({
-      httpClient,
+      agentRepository,
       agentTypes: ['developer', 'architect', 'tester']
     });
 
