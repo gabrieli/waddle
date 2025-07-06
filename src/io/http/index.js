@@ -2,6 +2,8 @@
 import express from 'express';
 import { getDatabase } from '../db/index.ts';
 import { initializeAgentsOnStartup } from '../startup/agent-initialization.ts';
+import { createTasksRouter } from './routes/tasks.ts';
+import { createTaskService } from '../services/task-service.ts';
 
 // Global scheduler instance
 let schedulerInterval = null;
@@ -368,6 +370,11 @@ app.post('/api/scheduler/stop', async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
+
+// Task management API endpoints
+const taskService = createTaskService(getDatabase());
+const taskRouter = createTasksRouter(taskService);
+app.use('/api/tasks', taskRouter);
 
 // Start server
 const PORT = process.env.PORT || 3000;
