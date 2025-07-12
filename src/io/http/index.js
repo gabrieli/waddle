@@ -376,6 +376,13 @@ const taskService = createTaskService(getDatabase());
 const taskRouter = createTasksRouter(taskService);
 app.use('/api/tasks', taskRouter);
 
+// Work Items API endpoints
+import { createWorkItemService } from '../services/work-item-service.ts';
+import { createWorkItemsRouter } from './routes/work-items-api.ts';
+const workItemService = createWorkItemService(getDatabase());
+const workItemRouter = createWorkItemsRouter(workItemService);
+app.use('/api/work-items', workItemRouter);
+
 // Start server
 const PORT = process.env.PORT || 3000;
 const server = app.listen(PORT, async () => {

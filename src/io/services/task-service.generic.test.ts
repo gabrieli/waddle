@@ -51,36 +51,36 @@ describe('Generic Task Creation', () => {
     `).run();
   }
 
-  describe('Task creation with only type and user_story_id', () => {
-    it('should create a development task with user_story_id', async () => {
+  describe('Task creation with type and work_item_id', () => {
+    it('should create a development task with work_item_id', async () => {
       const result = await taskService.createTask({
         type: 'development',
-        user_story_id: 1
+        work_item_id: 1
       });
 
       assert.strictEqual(result.success, true);
       assert.strictEqual(result.type, 'development');
-      assert.strictEqual(result.userStoryId, 1);
+      assert.strictEqual(result.workItemId, 1);
       assert.strictEqual(result.parentTaskId, undefined);
 
       // Verify in database
       const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(result.taskId);
       assert.strictEqual(task.type, 'development');
-      assert.strictEqual(task.user_story_id, 1);
+      assert.strictEqual(task.user_story_id, 1); // Column name is still user_story_id
       assert.strictEqual(task.parent_task_id, null);
       assert.strictEqual(task.status, 'new');
     });
 
-    it('should create a testing task with user_story_id and branch_name', async () => {
+    it('should create a testing task with work_item_id and branch_name', async () => {
       const result = await taskService.createTask({
         type: 'testing',
-        user_story_id: 1,
+        work_item_id: 1,
         branch_name: 'feature/custom-branch'
       });
 
       assert.strictEqual(result.success, true);
       assert.strictEqual(result.type, 'testing');
-      assert.strictEqual(result.userStoryId, 1);
+      assert.strictEqual(result.workItemId, 1);
 
       // Verify branch name in database
       const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(result.taskId);
@@ -89,34 +89,35 @@ describe('Generic Task Creation', () => {
   });
 
   describe('Task creation with parent_task_id', () => {
-    it('should create a testing task inheriting from parent', async () => {
+    it('should create a testing task with work_item_id and parent_task_id', async () => {
       const result = await taskService.createTask({
         type: 'testing',
+        work_item_id: 1,
         parent_task_id: 1
       });
 
       assert.strictEqual(result.success, true);
       assert.strictEqual(result.type, 'testing');
       assert.strictEqual(result.parentTaskId, 1);
-      assert.strictEqual(result.userStoryId, 1); // Inherited from parent
+      assert.strictEqual(result.workItemId, 1);
 
-      // Verify inheritance in database
+      // Verify in database
       const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(result.taskId);
       assert.strictEqual(task.parent_task_id, 1);
-      assert.strictEqual(task.user_story_id, 1); // Inherited
-      assert.strictEqual(task.branch_name, 'feature/test-branch'); // Inherited
+      assert.strictEqual(task.user_story_id, 1);
+      assert.strictEqual(task.branch_name, 'feature/test-branch'); // Inherited from parent
     });
 
-    it('should allow overriding inherited values', async () => {
+    it('should allow overriding branch name', async () => {
       const result = await taskService.createTask({
         type: 'testing',
+        work_item_id: 2,
         parent_task_id: 1,
-        user_story_id: 2, // Override parent's user_story_id
-        branch_name: 'feature/override-branch' // Override parent's branch
+        branch_name: 'feature/override-branch'
       });
 
       assert.strictEqual(result.success, true);
-      assert.strictEqual(result.userStoryId, 2); // Overridden
+      assert.strictEqual(result.workItemId, 2);
 
       // Verify overrides in database
       const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(result.taskId);
@@ -132,7 +133,7 @@ describe('Generic Task Creation', () => {
       for (const type of validTypes) {
         const result = await taskService.createTask({
           type,
-          user_story_id: 1
+          work_item_id: 1
         });
         assert.strictEqual(result.success, true);
         assert.strictEqual(result.type, type);
@@ -144,7 +145,7 @@ describe('Generic Task Creation', () => {
         async () => {
           await taskService.createTask({
             type: 'invalid',
-            user_story_id: 1
+            work_item_id: 1
           });
         },
         {
@@ -155,16 +156,16 @@ describe('Generic Task Creation', () => {
   });
 
   describe('Parameter validation', () => {
-    it('should require either user_story_id or parent_task_id', async () => {
+    it('should reject non-existent work_item_id', async () => {
       await assert.rejects(
         async () => {
           await taskService.createTask({
-            type: 'development'
-            // No user_story_id or parent_task_id
+            type: 'development',
+            work_item_id: 999
           });
         },
         {
-          message: 'Either user_story_id or parent_task_id must be provided'
+          message: 'Work item not found'
         }
       );
     });
@@ -174,6 +175,7 @@ describe('Generic Task Creation', () => {
         async () => {
           await taskService.createTask({
             type: 'testing',
+            work_item_id: 1,
             parent_task_id: 999
           });
         },
@@ -189,19 +191,21 @@ describe('Generic Task Creation', () => {
       // Create development task
       const dev = await taskService.createTask({
         type: 'development',
-        user_story_id: 1,
+        work_item_id: 1,
         branch_name: 'feature/chain-test'
       });
 
       // Create testing task as child of dev
       const test = await taskService.createTask({
         type: 'testing',
+        work_item_id: 1,
         parent_task_id: dev.taskId
       });
 
       // Create review task as child of test
       const review = await taskService.createTask({
         type: 'review',
+        work_item_id: 1,
         parent_task_id: test.taskId
       });
 
@@ -209,7 +213,7 @@ describe('Generic Task Creation', () => {
       assert.strictEqual(test.parentTaskId, dev.taskId);
       assert.strictEqual(review.parentTaskId, test.taskId);
       
-      // All should have same user_story_id and branch_name
+      // All should have same work_item_id and branch_name
       const testTask = db.prepare('SELECT * FROM tasks WHERE id = ?').get(test.taskId);
       const reviewTask = db.prepare('SELECT * FROM tasks WHERE id = ?').get(review.taskId);
       
