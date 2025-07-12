@@ -31,6 +31,10 @@ export function createTasksRouter(options: TasksRouterOptions): Router {
 
   // Process task
   router.post('/:taskId/process', async (req, res) => {
+    // Set 10-minute timeout for task processing
+    req.setTimeout(600000); // 10 minutes in milliseconds
+    res.setTimeout(600000);
+    
     try {
       const taskId = parseInt(req.params.taskId);
       const { wait = false } = req.body;
