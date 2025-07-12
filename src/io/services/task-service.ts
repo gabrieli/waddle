@@ -68,17 +68,13 @@ export function createTaskService(db: Database.Database): TaskService {
       };
     },
     
-    async createNextTask(parentTaskId: number, type: string) {
-      // Get parent task
-      const parentTask = db.prepare('SELECT * FROM tasks WHERE id = ?').get(parentTaskId);
-      
-      if (!parentTask) {
-        throw new Error('Parent task not found');
-      }
-      
-      if (parentTask.status !== 'done') {
-        throw new Error('Parent task must be completed before creating next task');
-      }
+    async createTask(params: {
+      type: string;
+      parent_task_id?: number;
+      user_story_id?: number;
+      branch_name?: string;
+    }) {
+      const { type, parent_task_id, user_story_id, branch_name } = params;
       
       // Validate task type
       const validTypes = ['development', 'testing', 'review'];
@@ -86,19 +82,47 @@ export function createTaskService(db: Database.Database): TaskService {
         throw new Error(`Invalid task type: ${type}. Must be one of: ${validTypes.join(', ')}`);
       }
       
-      // Create next task (inherit branch_name from parent)
+      // If parent_task_id is provided, validate and inherit values
+      let actualUserStoryId = user_story_id;
+      let actualBranchName = branch_name;
+      
+      if (parent_task_id) {
+        const parentTask = db.prepare('SELECT * FROM tasks WHERE id = ?').get(parent_task_id);
+        
+        if (!parentTask) {
+          throw new Error('Parent task not found');
+        }
+        
+        // If user_story_id not provided, inherit from parent
+        if (!actualUserStoryId) {
+          actualUserStoryId = parentTask.user_story_id;
+        }
+        
+        // If branch_name not provided, inherit from parent
+        if (!actualBranchName) {
+          actualBranchName = parentTask.branch_name;
+        }
+      }
+      
+      // Validate that we have either user_story_id or parent_task_id
+      if (!actualUserStoryId && !parent_task_id) {
+        throw new Error('Either user_story_id or parent_task_id must be provided');
+      }
+      
+      // Create the task
       const insertTask = db.prepare(`
         INSERT INTO tasks (user_story_id, parent_task_id, type, status, branch_name, created_at)
         VALUES (?, ?, ?, 'new', ?, CURRENT_TIMESTAMP)
       `);
       
-      const result = insertTask.run(parentTask.user_story_id, parentTaskId, type, parentTask.branch_name);
+      const result = insertTask.run(actualUserStoryId, parent_task_id || null, type, actualBranchName || null);
       
       return {
         success: true,
         taskId: result.lastInsertRowid as number,
         type,
-        parentTaskId
+        parentTaskId: parent_task_id,
+        userStoryId: actualUserStoryId
       };
     }
   };

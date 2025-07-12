@@ -17,11 +17,17 @@ export interface TaskService {
     summary: string;
   }>;
   
-  createNextTask(parentTaskId: number, type: string): Promise<{
+  createTask(params: {
+    type: string;
+    parent_task_id?: number;
+    user_story_id?: number;
+    branch_name?: string;
+  }): Promise<{
     success: boolean;
     taskId: number;
     type: string;
-    parentTaskId: number;
+    parentTaskId?: number;
+    userStoryId?: number;
   }>;
 }
 
@@ -74,20 +80,24 @@ export function createTasksRouter(service: TaskService): Router {
     }
   });
 
-  // Create next task
-  router.post('/:taskId/create-next', async (req, res) => {
+  // Create task (generic)
+  router.post('/', async (req, res) => {
     try {
-      const taskId = parseInt(req.params.taskId);
-      const { type } = req.body;
+      const { type, parent_task_id, user_story_id, branch_name } = req.body;
 
-      if (!taskId || !type) {
+      if (!type) {
         return res.status(400).json({
           success: false,
-          error: 'taskId and type are required'
+          error: 'type is required'
         });
       }
 
-      const result = await service.createNextTask(taskId, type);
+      const result = await service.createTask({
+        type,
+        parent_task_id,
+        user_story_id,
+        branch_name
+      });
       res.json(result);
     } catch (error) {
       res.status(400).json({
