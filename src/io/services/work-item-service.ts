@@ -3,8 +3,11 @@
  */
 import Database from 'better-sqlite3';
 import type { WorkItemService } from '../http/routes/work-items-api.ts';
+import { createTaskService } from './task-service.ts';
 
 export function createWorkItemService(db: Database.Database): WorkItemService {
+  const taskService = createTaskService(db);
+  
   return {
     async createWorkItem(params: {
       name: string;
@@ -21,10 +24,31 @@ export function createWorkItemService(db: Database.Database): WorkItemService {
       `);
       
       const result = insertWorkItem.run(name, description, type, assigned_to);
+      const workItemId = result.lastInsertRowid as number;
+      
+      // Determine task type based on assigned_to
+      let taskType: string;
+      switch (assigned_to) {
+        case 'developer':
+          taskType = 'development';
+          break;
+        case 'architect':
+          taskType = 'development'; // architects create development tasks
+          break;
+        case 'tester':
+          taskType = 'testing';
+          break;
+      }
+      
+      // Create the task automatically
+      await taskService.createTask({
+        type: taskType,
+        work_item_id: workItemId
+      });
       
       return {
         success: true,
-        workItemId: result.lastInsertRowid as number,
+        workItemId,
         name,
         type,
         assigned_to

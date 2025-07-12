@@ -132,5 +132,70 @@ describe('Work Item Service', () => {
       assert(!isNaN(createdAt.getTime()));
       assert(!isNaN(updatedAt.getTime()));
     });
+
+    it('should create a task automatically when creating a work item', async () => {
+      // Create a work item assigned to developer
+      const result = await workItemService.createWorkItem({
+        name: 'Feature with automatic task',
+        description: 'This should create a development task',
+        type: 'user_story',
+        assigned_to: 'developer'
+      });
+
+      assert.strictEqual(result.success, true);
+
+      // Verify the work item was created
+      const workItem = db.prepare('SELECT * FROM work_items WHERE id = ?').get(result.workItemId);
+      assert(workItem);
+
+      // Verify a task was automatically created
+      const task = db.prepare('SELECT * FROM tasks WHERE user_story_id = ?').get(result.workItemId);
+      assert(task, 'Task should be automatically created');
+      assert.strictEqual(task.type, 'development');
+      assert.strictEqual(task.status, 'new');
+      assert.strictEqual(task.user_story_id, result.workItemId);
+    });
+
+    it('should create appropriate task type based on assigned_to', async () => {
+      const testCases = [
+        { assigned_to: 'developer', expected_task_type: 'development' },
+        { assigned_to: 'architect', expected_task_type: 'development' }, // architect creates development task
+        { assigned_to: 'tester', expected_task_type: 'testing' }
+      ];
+
+      for (const testCase of testCases) {
+        const result = await workItemService.createWorkItem({
+          name: `Work item for ${testCase.assigned_to}`,
+          description: `Testing automatic task creation for ${testCase.assigned_to}`,
+          type: 'user_story',
+          assigned_to: testCase.assigned_to as any
+        });
+
+        const task = db.prepare('SELECT * FROM tasks WHERE user_story_id = ?').get(result.workItemId);
+        assert(task, `Task should be created for ${testCase.assigned_to}`);
+        assert.strictEqual(task.type, testCase.expected_task_type, 
+          `Task type should be ${testCase.expected_task_type} for ${testCase.assigned_to}`);
+      }
+    });
+
+    it('should create task without branch name initially', async () => {
+      // Create a work item that should create a task
+      const result = await workItemService.createWorkItem({
+        name: 'Feature without branch',
+        description: 'Task should be created without branch name initially',
+        type: 'user_story',
+        assigned_to: 'developer'
+      });
+
+      const workItem = db.prepare('SELECT * FROM work_items WHERE id = ?').get(result.workItemId);
+      const task = db.prepare('SELECT * FROM tasks WHERE user_story_id = ?').get(result.workItemId);
+      
+      // Verify task was created
+      assert(task, 'Task should be created');
+      assert.strictEqual(task.branch_name, null, 'Task should not have branch name initially');
+      
+      // Work item also shouldn't have branch name initially
+      assert.strictEqual(workItem.branch_name, null, 'Work item should not have branch name initially');
+    });
   });
 });
