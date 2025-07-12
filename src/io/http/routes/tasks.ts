@@ -2,21 +2,10 @@
  * Tasks API Routes
  */
 import { Router } from 'express';
+import Database from 'better-sqlite3';
+import { processDevelopmentTask } from '../../processors/development-processor.ts';
 
 export interface TaskService {
-  assignTaskToAgent(taskId: number, agentId?: number): Promise<{
-    success: boolean;
-    taskId: number;
-    agentId: number | null;
-    status: string;
-  }>;
-  
-  completeTask(taskId: number, summary: string): Promise<{
-    success: boolean;
-    taskId: number;
-    summary: string;
-  }>;
-  
   createTask(params: {
     type: string;
     parent_task_id?: number;
@@ -31,14 +20,20 @@ export interface TaskService {
   }>;
 }
 
-export function createTasksRouter(service: TaskService): Router {
+export interface TasksRouterOptions {
+  service: TaskService;
+  database: Database.Database;
+}
+
+export function createTasksRouter(options: TasksRouterOptions): Router {
+  const { service, database } = options;
   const router = Router();
 
-  // Assign task to agent
-  router.post('/:taskId/assign', async (req, res) => {
+  // Process task
+  router.post('/:taskId/process', async (req, res) => {
     try {
       const taskId = parseInt(req.params.taskId);
-      const { agentId } = req.body;
+      const { wait = false } = req.body;
 
       if (!taskId) {
         return res.status(400).json({
@@ -47,33 +42,54 @@ export function createTasksRouter(service: TaskService): Router {
         });
       }
 
-      const result = await service.assignTaskToAgent(taskId, agentId);
-      res.json(result);
-    } catch (error) {
-      res.status(400).json({
-        success: false,
-        error: error.message
-      });
-    }
-  });
-
-  // Complete task with summary
-  router.post('/:taskId/complete', async (req, res) => {
-    try {
-      const taskId = parseInt(req.params.taskId);
-      const { summary } = req.body;
-
-      if (!taskId || !summary) {
-        return res.status(400).json({
+      // Get task to determine type
+      const task = database.prepare('SELECT * FROM tasks WHERE id = ?').get(taskId);
+      if (!task) {
+        return res.status(404).json({
           success: false,
-          error: 'taskId and summary are required'
+          error: 'Task not found'
         });
       }
 
-      const result = await service.completeTask(taskId, summary);
+      // If wait is true, just set wait flag and return
+      if (wait) {
+        database.prepare('UPDATE tasks SET wait = TRUE WHERE id = ?').run(taskId);
+        return res.json({
+          success: true,
+          message: 'Task queued for processing'
+        });
+      }
+
+      // Process immediately based on task type
+      let result;
+      switch (task.type) {
+        case 'development':
+          result = await processDevelopmentTask(taskId, database);
+          break;
+        case 'testing':
+          // TODO: Implement testing processor
+          result = { 
+            success: false, 
+            error: 'Testing processor not implemented yet' 
+          };
+          break;
+        case 'review':
+          // TODO: Implement review processor
+          result = { 
+            success: false, 
+            error: 'Review processor not implemented yet' 
+          };
+          break;
+        default:
+          result = { 
+            success: false, 
+            error: `Unknown task type: ${task.type}` 
+          };
+      }
+
       res.json(result);
     } catch (error) {
-      res.status(400).json({
+      res.status(500).json({
         success: false,
         error: error.message
       });

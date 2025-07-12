@@ -139,6 +139,18 @@ const migrations: Migration[] = [
       // For now, we'll leave this as a comment since it's complex
       '-- Cannot easily drop column in SQLite'
     ]
+  },
+  {
+    version: 5,
+    name: 'add_wait_to_tasks',
+    up: [
+      // Add wait column to tasks table
+      `ALTER TABLE tasks ADD COLUMN wait BOOLEAN DEFAULT FALSE`
+    ],
+    down: [
+      // SQLite doesn't support DROP COLUMN, so we'd need to recreate the table
+      '-- Cannot easily drop column in SQLite'
+    ]
   }
 ];
 

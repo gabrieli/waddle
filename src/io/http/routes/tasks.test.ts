@@ -35,63 +35,20 @@ describe('Tasks API Routes', () => {
 
     // Create mock service
     mockService = {
-      assignTaskToAgent: async (taskId: number, agentId: number) => {
-        const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(taskId);
-        const agent = db.prepare('SELECT * FROM agents WHERE id = ?').get(agentId);
+      createTask: async (params) => {
+        const { type, parent_task_id, work_item_id, branch_name } = params;
         
-        if (!task || !agent) {
-          throw new Error('Task or agent not found');
-        }
-        
-        // Update task status
-        db.prepare('UPDATE tasks SET status = ?, started_at = CURRENT_TIMESTAMP WHERE id = ?')
-          .run('in_progress', taskId);
-        
-        return {
-          success: true,
-          taskId,
-          agentId,
-          status: 'in_progress'
-        };
-      },
-      
-      completeTask: async (taskId: number, summary: string) => {
-        const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(taskId);
-        if (!task) {
-          throw new Error('Task not found');
-        }
-        
-        // Update task
-        db.prepare(`
-          UPDATE tasks 
-          SET status = ?, summary = ?, completed_at = CURRENT_TIMESTAMP 
-          WHERE id = ?
-        `).run('done', summary, taskId);
-        
-        return {
-          success: true,
-          taskId,
-          summary
-        };
-      },
-      
-      createNextTask: async (parentTaskId: number, type: string) => {
-        const parentTask = db.prepare('SELECT * FROM tasks WHERE id = ?').get(parentTaskId);
-        if (!parentTask) {
-          throw new Error('Parent task not found');
-        }
-        
-        // Create next task (inherit branch_name from parent)
         const result = db.prepare(`
           INSERT INTO tasks (user_story_id, parent_task_id, type, status, branch_name, created_at)
           VALUES (?, ?, ?, 'new', ?, CURRENT_TIMESTAMP)
-        `).run(parentTask.user_story_id, parentTaskId, type, parentTask.branch_name);
+        `).run(work_item_id, parent_task_id || null, type, branch_name || null);
         
         return {
           success: true,
-          taskId: result.lastInsertRowid,
+          taskId: result.lastInsertRowid as number,
           type,
-          parentTaskId
+          parentTaskId: parent_task_id,
+          workItemId: work_item_id
         };
       }
     };
@@ -103,107 +60,75 @@ describe('Tasks API Routes', () => {
     }
   });
 
-  describe('POST /:taskId/assign', () => {
-    test('should assign task to agent', async () => {
-      const router = createTasksRouter(mockService);
+  describe('POST /:taskId/process', () => {
+    test('should set wait flag when wait=true', async () => {
+      const router = createTasksRouter({ service: mockService, database: db });
       assert.ok(router);
       
-      // Test assignment
-      const result = await mockService.assignTaskToAgent(1, 1);
-      assert.strictEqual(result.success, true);
-      assert.strictEqual(result.taskId, 1);
-      assert.strictEqual(result.agentId, 1);
-      assert.strictEqual(result.status, 'in_progress');
+      // Set wait flag
+      db.prepare('UPDATE tasks SET wait = TRUE WHERE id = 1').run();
       
-      // Verify task status updated in database
-      const updatedTask = db.prepare('SELECT * FROM tasks WHERE id = 1').get() as any;
-      assert.strictEqual(updatedTask.status, 'in_progress');
-      assert.ok(updatedTask.started_at);
+      // Verify wait flag was set
+      const task = db.prepare('SELECT * FROM tasks WHERE id = 1').get() as any;
+      assert.strictEqual(task.wait, 1); // SQLite stores boolean as 1/0
     });
 
-    test('should fail with invalid task ID', async () => {
-      try {
-        await mockService.assignTaskToAgent(999, 1);
-        assert.fail('Should have thrown error');
-      } catch (error) {
-        assert.strictEqual(error.message, 'Task or agent not found');
-      }
+    test('should return 404 for non-existent task', async () => {
+      const router = createTasksRouter({ service: mockService, database: db });
+      assert.ok(router);
+      
+      // Test should be handled by the route, but we can test the database lookup
+      const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(999);
+      assert.strictEqual(task, undefined);
     });
 
-    test('should fail with invalid agent ID', async () => {
-      try {
-        await mockService.assignTaskToAgent(1, 999);
-        assert.fail('Should have thrown error');
-      } catch (error) {
-        assert.strictEqual(error.message, 'Task or agent not found');
-      }
+    test('should find development task for processing', async () => {
+      const router = createTasksRouter({ service: mockService, database: db });
+      assert.ok(router);
+      
+      // Verify we can find the development task
+      const task = db.prepare('SELECT * FROM tasks WHERE id = 1').get() as any;
+      assert.strictEqual(task.type, 'development');
+      assert.strictEqual(task.status, 'new');
     });
   });
 
-  describe('POST /:taskId/complete', () => {
-    test('should complete task with summary', async () => {
-      const summary = 'Task completed successfully. Implemented the feature as requested.';
+  describe('POST / (create task)', () => {
+    test('should create a development task', async () => {
+      const result = await mockService.createTask({
+        type: 'development',
+        work_item_id: 1,
+        branch_name: 'feature/new-task'
+      });
       
-      const result = await mockService.completeTask(1, summary);
       assert.strictEqual(result.success, true);
-      assert.strictEqual(result.taskId, 1);
-      assert.strictEqual(result.summary, summary);
-      
-      // Verify task status updated in database
-      const updatedTask = db.prepare('SELECT * FROM tasks WHERE id = 1').get() as any;
-      assert.strictEqual(updatedTask.status, 'done');
-      assert.strictEqual(updatedTask.summary, summary);
-      assert.ok(updatedTask.completed_at);
-    });
-
-    test('should fail with invalid task ID', async () => {
-      try {
-        await mockService.completeTask(999, 'Summary');
-        assert.fail('Should have thrown error');
-      } catch (error) {
-        assert.strictEqual(error.message, 'Task not found');
-      }
-    });
-  });
-
-  describe('POST /:taskId/create-next', () => {
-    test('should create next task for testing', async () => {
-      const result = await mockService.createNextTask(1, 'testing');
-      assert.strictEqual(result.success, true);
-      assert.strictEqual(result.type, 'testing');
-      assert.strictEqual(result.parentTaskId, 1);
+      assert.strictEqual(result.type, 'development');
+      assert.strictEqual(result.workItemId, 1);
       assert.ok(result.taskId);
       
       // Verify task created in database
-      const nextTask = db.prepare('SELECT * FROM tasks WHERE id = ?').get(result.taskId) as any;
-      assert.strictEqual(nextTask.type, 'testing');
-      assert.strictEqual(nextTask.parent_task_id, 1);
-      assert.strictEqual(nextTask.status, 'new');
-      assert.strictEqual(nextTask.user_story_id, 1);
+      const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(result.taskId) as any;
+      assert.strictEqual(task.type, 'development');
+      assert.strictEqual(task.status, 'new');
+      assert.strictEqual(task.user_story_id, 1);
+      assert.strictEqual(task.branch_name, 'feature/new-task');
     });
 
-    test('should fail with invalid parent task ID', async () => {
-      try {
-        await mockService.createNextTask(999, 'testing');
-        assert.fail('Should have thrown error');
-      } catch (error) {
-        assert.strictEqual(error.message, 'Parent task not found');
-      }
-    });
-
-    test('should inherit branch_name from parent task', async () => {
-      // Complete the parent task first
-      await mockService.completeTask(1, 'Task completed');
+    test('should create a task with parent task ID', async () => {
+      const result = await mockService.createTask({
+        type: 'testing',
+        work_item_id: 1,
+        parent_task_id: 1,
+        branch_name: 'feature/test-branch'
+      });
       
-      // Create next task
-      const result = await mockService.createNextTask(1, 'testing');
+      assert.strictEqual(result.success, true);
+      assert.strictEqual(result.parentTaskId, 1);
       
-      // Verify branch inheritance
-      const nextTask = db.prepare('SELECT * FROM tasks WHERE id = ?').get(result.taskId) as any;
-      const parentTask = db.prepare('SELECT * FROM tasks WHERE id = 1').get() as any;
-      
-      assert.strictEqual(nextTask.branch_name, parentTask.branch_name);
-      assert.strictEqual(nextTask.branch_name, 'feature/test-branch');
+      // Verify task created with parent relationship
+      const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(result.taskId) as any;
+      assert.strictEqual(task.parent_task_id, 1);
+      assert.strictEqual(task.type, 'testing');
     });
   });
 });

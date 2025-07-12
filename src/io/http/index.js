@@ -373,7 +373,10 @@ app.post('/api/scheduler/stop', async (req, res) => {
 
 // Task management API endpoints
 const taskService = createTaskService(getDatabase());
-const taskRouter = createTasksRouter(taskService);
+const taskRouter = createTasksRouter({ 
+  service: taskService, 
+  database: getDatabase() 
+});
 app.use('/api/tasks', taskRouter);
 
 // Work Items API endpoints
