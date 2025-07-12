@@ -1,0 +1,671 @@
+{
+  "_type": "export",
+  "__export_format": 4,
+  "__export_date": "2025-01-12T10:00:00.000Z",
+  "__export_source": "insomnia.desktop.app:v2023.5.8",
+  "resources": [
+    {
+      "_id": "req_base",
+      "parentId": "wrk_waddle",
+      "modified": 1736676000000,
+      "created": 1736676000000,
+      "url": "{{ _.BASE_URL }}",
+      "name": "Base",
+      "description": "",
+      "method": "GET",
+      "body": {},
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": -1736676000000,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_health",
+      "parentId": "fld_health",
+      "modified": 1736676000000,
+      "created": 1736676000000,
+      "url": "{{ _.BASE_URL }}/health",
+      "name": "Health Check",
+      "description": "Check server health status",
+      "method": "GET",
+      "body": {},
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": -1736676000000,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_commands_list",
+      "parentId": "fld_commands",
+      "modified": 1736676000000,
+      "created": 1736676000000,
+      "url": "{{ _.BASE_URL }}/commands",
+      "name": "List Available Commands",
+      "description": "Get list of available command endpoints",
+      "method": "GET",
+      "body": {},
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": -1736676000000,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_cmd_status",
+      "parentId": "fld_commands",
+      "modified": 1736676000000,
+      "created": 1736676000000,
+      "url": "{{ _.BASE_URL }}/command/status",
+      "name": "Status Command",
+      "description": "Get server status",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{}"
+      },
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": -1736675999900,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_cmd_echo",
+      "parentId": "fld_commands",
+      "modified": 1736676000000,
+      "created": 1736676000000,
+      "url": "{{ _.BASE_URL }}/command/echo",
+      "name": "Echo Command",
+      "description": "Echo a message",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"message\": \"Hello, World!\"\n}"
+      },
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": -1736675999800,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_cmd_process",
+      "parentId": "fld_commands",
+      "modified": 1736676000000,
+      "created": 1736676000000,
+      "url": "{{ _.BASE_URL }}/command/process",
+      "name": "Process Command",
+      "description": "Process data",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"data\": \"Sample data to process\"\n}"
+      },
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": -1736675999700,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_cmd_calculate",
+      "parentId": "fld_commands",
+      "modified": 1736676000000,
+      "created": 1736676000000,
+      "url": "{{ _.BASE_URL }}/command/calculate",
+      "name": "Calculate Command",
+      "description": "Perform calculations",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"operation\": \"add\",\n  \"a\": 10,\n  \"b\": 5\n}"
+      },
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": -1736675999600,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_cmd_list",
+      "parentId": "fld_commands",
+      "modified": 1736676000000,
+      "created": 1736676000000,
+      "url": "{{ _.BASE_URL }}/command/list",
+      "name": "List Command",
+      "description": "List items by type",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"type\": \"all\"\n}"
+      },
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": -1736675999500,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_cmd_restart",
+      "parentId": "fld_commands",
+      "modified": 1736676000000,
+      "created": 1736676000000,
+      "url": "{{ _.BASE_URL }}/command/restart",
+      "name": "Restart Command",
+      "description": "Restart a service",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"service\": \"default\"\n}"
+      },
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": -1736675999400,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_agents_create",
+      "parentId": "fld_agents",
+      "modified": 1736676000000,
+      "created": 1736676000000,
+      "url": "{{ _.BASE_URL }}/api/agents",
+      "name": "Create Agent",
+      "description": "Create a new agent",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"type\": \"developer\"\n}"
+      },
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": -1736675999300,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_agents_delete_all",
+      "parentId": "fld_agents",
+      "modified": 1736676000000,
+      "created": 1736676000000,
+      "url": "{{ _.BASE_URL }}/api/agents",
+      "name": "Delete All Agents",
+      "description": "Delete all agents",
+      "method": "DELETE",
+      "body": {},
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": -1736675999200,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_work_items_create",
+      "parentId": "fld_work_items",
+      "modified": 1736676000000,
+      "created": 1736676000000,
+      "url": "{{ _.BASE_URL }}/api/work-items",
+      "name": "Create Work Item",
+      "description": "Create a new work item",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"name\": \"Implement user authentication\",\n  \"description\": \"Add JWT-based authentication to the API\",\n  \"type\": \"user_story\",\n  \"assigned_to\": \"developer\"\n}"
+      },
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": -1736675999100,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_work_items_clear_assignments",
+      "parentId": "fld_work_items",
+      "modified": 1736676000000,
+      "created": 1736676000000,
+      "url": "{{ _.BASE_URL }}/api/work-items/assignments",
+      "name": "Clear Work Item Assignments",
+      "description": "Clear all work item assignments",
+      "method": "PATCH",
+      "body": {},
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": -1736675999000,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_tasks_create",
+      "parentId": "fld_tasks",
+      "modified": 1736676000000,
+      "created": 1736676000000,
+      "url": "{{ _.BASE_URL }}/api/tasks",
+      "name": "Create Task",
+      "description": "Create a new task",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"type\": \"development\",\n  \"work_item_id\": 1,\n  \"branch_name\": \"feature/auth-implementation\"\n}"
+      },
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": -1736675998900,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_tasks_process",
+      "parentId": "fld_tasks",
+      "modified": 1736676000000,
+      "created": 1736676000000,
+      "url": "{{ _.BASE_URL }}/api/tasks/1/process",
+      "name": "Process Task",
+      "description": "Process a specific task",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"wait\": false\n}"
+      },
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": -1736675998800,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_scheduler_status",
+      "parentId": "fld_scheduler",
+      "modified": 1736676000000,
+      "created": 1736676000000,
+      "url": "{{ _.BASE_URL }}/api/scheduler/status",
+      "name": "Get Scheduler Status",
+      "description": "Get current scheduler status",
+      "method": "GET",
+      "body": {},
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": -1736675998700,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_scheduler_start",
+      "parentId": "fld_scheduler",
+      "modified": 1736676000000,
+      "created": 1736676000000,
+      "url": "{{ _.BASE_URL }}/api/scheduler/start",
+      "name": "Start Scheduler",
+      "description": "Start the work assignment scheduler",
+      "method": "POST",
+      "body": {},
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": -1736675998600,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_scheduler_stop",
+      "parentId": "fld_scheduler",
+      "modified": 1736676000000,
+      "created": 1736676000000,
+      "url": "{{ _.BASE_URL }}/api/scheduler/stop",
+      "name": "Stop Scheduler",
+      "description": "Stop the work assignment scheduler",
+      "method": "POST",
+      "body": {},
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": -1736675998500,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "fld_health",
+      "parentId": "wrk_waddle",
+      "modified": 1736676000000,
+      "created": 1736676000000,
+      "name": "Health Check",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -1736676000000,
+      "_type": "request_group"
+    },
+    {
+      "_id": "fld_commands",
+      "parentId": "wrk_waddle",
+      "modified": 1736676000000,
+      "created": 1736676000000,
+      "name": "Commands",
+      "description": "Generic command execution endpoints",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -1736675999900,
+      "_type": "request_group"
+    },
+    {
+      "_id": "fld_agents",
+      "parentId": "wrk_waddle",
+      "modified": 1736676000000,
+      "created": 1736676000000,
+      "name": "Agents",
+      "description": "Agent management endpoints",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -1736675999800,
+      "_type": "request_group"
+    },
+    {
+      "_id": "fld_work_items",
+      "parentId": "wrk_waddle",
+      "modified": 1736676000000,
+      "created": 1736676000000,
+      "name": "Work Items",
+      "description": "Work item management endpoints",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -1736675999700,
+      "_type": "request_group"
+    },
+    {
+      "_id": "fld_tasks",
+      "parentId": "wrk_waddle",
+      "modified": 1736676000000,
+      "created": 1736676000000,
+      "name": "Tasks",
+      "description": "Task management endpoints",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -1736675999600,
+      "_type": "request_group"
+    },
+    {
+      "_id": "fld_scheduler",
+      "parentId": "wrk_waddle",
+      "modified": 1736676000000,
+      "created": 1736676000000,
+      "name": "Scheduler",
+      "description": "Work assignment scheduler control",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -1736675999500,
+      "_type": "request_group"
+    },
+    {
+      "_id": "wrk_waddle",
+      "parentId": null,
+      "modified": 1736676000000,
+      "created": 1736676000000,
+      "name": "Waddle API",
+      "description": "HTTP server with CLI client for commands and work management",
+      "scope": "collection",
+      "_type": "workspace"
+    },
+    {
+      "_id": "env_base",
+      "parentId": "wrk_waddle",
+      "modified": 1736676000000,
+      "created": 1736676000000,
+      "name": "Base Environment",
+      "data": {
+        "BASE_URL": "http://localhost:3000"
+      },
+      "dataPropertyOrder": {
+        "&": ["BASE_URL"]
+      },
+      "color": null,
+      "isPrivate": false,
+      "metaSortKey": 1736676000000,
+      "_type": "environment"
+    },
+    {
+      "_id": "env_local",
+      "parentId": "wrk_waddle",
+      "modified": 1736676000000,
+      "created": 1736676000000,
+      "name": "Local Development",
+      "data": {
+        "BASE_URL": "http://localhost:3000"
+      },
+      "dataPropertyOrder": {
+        "&": ["BASE_URL"]
+      },
+      "color": "#7d69cb",
+      "isPrivate": false,
+      "metaSortKey": 1736676000001,
+      "_type": "environment"
+    },
+    {
+      "_id": "env_staging",
+      "parentId": "wrk_waddle",
+      "modified": 1736676000000,
+      "created": 1736676000000,
+      "name": "Staging",
+      "data": {
+        "BASE_URL": "https://staging.example.com"
+      },
+      "dataPropertyOrder": {
+        "&": ["BASE_URL"]
+      },
+      "color": "#f5a623",
+      "isPrivate": false,
+      "metaSortKey": 1736676000002,
+      "_type": "environment"
+    },
+    {
+      "_id": "env_production",
+      "parentId": "wrk_waddle",
+      "modified": 1736676000000,
+      "created": 1736676000000,
+      "name": "Production",
+      "data": {
+        "BASE_URL": "https://api.example.com"
+      },
+      "dataPropertyOrder": {
+        "&": ["BASE_URL"]
+      },
+      "color": "#ff0000",
+      "isPrivate": false,
+      "metaSortKey": 1736676000003,
+      "_type": "environment"
+    },
+    {
+      "_id": "jar_waddle",
+      "parentId": "wrk_waddle",
+      "modified": 1736676000000,
+      "created": 1736676000000,
+      "name": "Default Jar",
+      "cookies": [],
+      "_type": "cookie_jar"
+    },
+    {
+      "_id": "spc_waddle",
+      "parentId": "wrk_waddle",
+      "modified": 1736676000000,
+      "created": 1736676000000,
+      "fileName": "Waddle API",
+      "contents": "",
+      "contentType": "yaml",
+      "_type": "api_spec"
+    }
+  ]
+}
