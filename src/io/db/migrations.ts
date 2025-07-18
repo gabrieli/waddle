@@ -3,7 +3,7 @@ import Database from 'better-sqlite3';
 /**
  * Schema version information
  */
-export const CURRENT_SCHEMA_VERSION = 4;
+export const CURRENT_SCHEMA_VERSION = 5;
 
 /**
  * Migration interface

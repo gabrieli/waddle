@@ -9,8 +9,8 @@ import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 import Database from 'better-sqlite3';
 import { runMigrations } from '../db/migrations.ts';
-import { processDevelopmentTask } from './development-processor-testable.ts';
-import { setMockResult } from './__mocks__/claude-client.ts';
+import { processDevelopmentTask } from './development-processor.ts';
+import { setMockResult, getLastCall, resetMockCapture } from './__mocks__/claude-client.ts';
 import * as mockClaudeClient from './__mocks__/claude-client.ts';
 
 describe('Development Processor Integration Tests', () => {
@@ -28,6 +28,7 @@ describe('Development Processor Integration Tests', () => {
     
     // Reset mock to success state
     setMockResult({ success: true, output: 'Task completed successfully' });
+    resetMockCapture();
   });
 
   afterEach(() => {
@@ -147,5 +148,85 @@ describe('Development Processor Integration Tests', () => {
 
     // Should succeed - the description would be included in the prompt
     assert.strictEqual(result.success, true);
+  });
+
+  describe('Prompt Format and Content Tests', () => {
+    it('should build correct task prompt with all fields', async () => {
+      // Create a task with all optional fields
+      db.prepare(`
+        INSERT INTO tasks (id, user_story_id, type, status, branch_name, summary, created_at)
+        VALUES (10, 1, 'development', 'new', 'feature/complete-task', 'Previous work done', CURRENT_TIMESTAMP)
+      `).run();
+
+      await processDevelopmentTask(10, db, mockClaudeClient);
+
+      const { prompt, options } = getLastCall();
+      
+      // Verify task prompt contains expected sections
+      assert(prompt.includes('## Current Task'), 'Should include Current Task section');
+      assert(prompt.includes('development: Test Feature'), 'Should include task type and work item name');
+      assert(prompt.includes('## Description'), 'Should include Description section');
+      assert(prompt.includes('Implement a test feature'), 'Should include work item description');
+      assert(prompt.includes('## Previous Progress'), 'Should include Previous Progress section');
+      assert(prompt.includes('Previous work done'), 'Should include task summary');
+      assert(prompt.includes('## Branch'), 'Should include Branch section');
+      assert(prompt.includes('feature/complete-task'), 'Should include branch name');
+      
+      // Verify system prompt is passed correctly
+      assert(options.systemPrompt, 'Should have system prompt');
+      assert(options.systemPrompt.includes('Developer Role') || options.systemPrompt.includes('skilled developer'), 
+        'System prompt should contain developer instructions');
+    });
+
+    it('should build minimal task prompt when optional fields are missing', async () => {
+      // Create a task with minimal data
+      db.prepare(`
+        INSERT INTO tasks (id, user_story_id, type, status, created_at)
+        VALUES (11, 1, 'development', 'new', CURRENT_TIMESTAMP)
+      `).run();
+      
+      // Remove description from work item
+      db.prepare('UPDATE work_items SET description = NULL WHERE id = ?').run(1);
+
+      await processDevelopmentTask(11, db, mockClaudeClient);
+
+      const { prompt, options } = getLastCall();
+      
+      // Verify minimal task prompt
+      assert(prompt.includes('## Current Task'), 'Should include Current Task section');
+      assert(prompt.includes('development: Test Feature'), 'Should include task type and work item name');
+      assert(!prompt.includes('## Description'), 'Should not include Description section when null');
+      assert(!prompt.includes('## Previous Progress'), 'Should not include Previous Progress section when null');
+      assert(!prompt.includes('## Branch'), 'Should not include Branch section when null');
+      
+      // Verify system prompt is still passed
+      assert(options.systemPrompt, 'Should have system prompt even with minimal data');
+    });
+
+    it('should pass correct options to Claude client', async () => {
+      await processDevelopmentTask(1, db, mockClaudeClient);
+
+      const { options } = getLastCall();
+      
+      // Verify Claude execution options
+      assert.strictEqual(options.verbose, true, 'Should use verbose mode');
+      assert.strictEqual(options.timeout, 300000, 'Should use 5 minute timeout');
+      assert(options.systemPrompt, 'Should include system prompt');
+    });
+
+    it('should separate task prompt from system prompt correctly', async () => {
+      await processDevelopmentTask(1, db, mockClaudeClient);
+
+      const { prompt, options } = getLastCall();
+      
+      // Task prompt should NOT contain developer role instructions
+      assert(!prompt.includes('Developer Role'), 'Task prompt should not contain developer role');
+      assert(!prompt.includes('skilled developer'), 'Task prompt should not contain developer instructions');
+      assert(!prompt.includes('Project Structure'), 'Task prompt should not contain project structure');
+      
+      // System prompt should contain developer instructions
+      assert(options.systemPrompt.includes('Developer Role') || options.systemPrompt.includes('skilled developer'), 
+        'System prompt should contain developer instructions');
+    });
   });
 });

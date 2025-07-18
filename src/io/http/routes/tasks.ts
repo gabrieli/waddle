@@ -100,7 +100,7 @@ export function createTasksRouter(options: TasksRouterOptions): Router {
   // Create task (generic)
   router.post('/', async (req, res) => {
     try {
-      const { type, parent_task_id, work_item_id, branch_name } = req.body;
+      const { type, parent_task_id, user_story_id, work_item_id, branch_name } = req.body;
 
       if (!type) {
         return res.status(400).json({
@@ -109,20 +109,54 @@ export function createTasksRouter(options: TasksRouterOptions): Router {
         });
       }
 
-      if (!work_item_id) {
+      // Validate task type
+      const validTypes = ['development', 'testing', 'review'];
+      if (!validTypes.includes(type)) {
         return res.status(400).json({
           success: false,
-          error: 'work_item_id is required'
+          error: `Invalid task type: ${type}. Valid types are: ${validTypes.join(', ')}`
         });
+      }
+
+      // Either user_story_id or parent_task_id must be provided
+      const effectiveWorkItemId = work_item_id || user_story_id;
+      if (!effectiveWorkItemId && !parent_task_id) {
+        return res.status(400).json({
+          success: false,
+          error: 'Either user_story_id or parent_task_id must be provided'
+        });
+      }
+
+      // If parent_task_id is provided, get the work_item_id from parent task
+      let finalWorkItemId = effectiveWorkItemId;
+      if (parent_task_id && !finalWorkItemId) {
+        const parentTask = database.prepare('SELECT user_story_id, branch_name FROM tasks WHERE id = ?').get(parent_task_id);
+        if (!parentTask) {
+          return res.status(400).json({
+            success: false,
+            error: 'Parent task not found'
+          });
+        }
+        finalWorkItemId = parentTask.user_story_id;
       }
 
       const result = await service.createTask({
         type,
         parent_task_id,
-        work_item_id,
+        work_item_id: finalWorkItemId,
         branch_name
       });
-      res.json(result);
+      
+      // Transform response to match expected format
+      const response = {
+        success: result.success,
+        taskId: result.taskId,
+        type: result.type,
+        userStoryId: result.workItemId,
+        parentTaskId: result.parentTaskId
+      };
+      
+      res.json(response);
     } catch (error) {
       res.status(400).json({
         success: false,

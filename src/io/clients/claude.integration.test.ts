@@ -76,4 +76,18 @@ describe('Claude functional client', () => {
     assert(result.success);
     assert(result.output);
   });
+
+  test('should support system prompt option', async () => {
+    const systemPrompt = 'You are a helpful assistant with expertise in testing.';
+    const result = await executeClaude('echo "Hello"', { 
+      verbose: true, 
+      timeout: 30000,
+      systemPrompt 
+    });
+    
+    assert(typeof result === 'object');
+    assert('success' in result);
+    assert('output' in result);
+    // The actual behavior with --append-system-prompt will depend on Claude's implementation
+  });
 });

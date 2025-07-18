@@ -70,7 +70,7 @@ describe('Generic Task Creation API', () => {
     const taskService = createTaskService(db);
     app = express();
     app.use(express.json());
-    app.use('/api/tasks', createTasksRouter(taskService));
+    app.use('/api/tasks', createTasksRouter({ service: taskService, database: db }));
   });
 
   afterEach(() => {

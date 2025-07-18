@@ -10,16 +10,20 @@ import Database from 'better-sqlite3';
 import { executeClaude } from '../clients/claude.ts';
 import { createTaskService } from '../services/task-service.ts';
 
-// Real Claude client wrapper
-const realClaudeClient = {
-  executeClaude
-};
-
 export interface ProcessResult {
   success: boolean;
   summary?: string;
   error?: string;
 }
+
+export interface ClaudeClient {
+  executeClaude(prompt: string, options?: any): Promise<any>;
+}
+
+// Default Claude client for production use
+const defaultClaudeClient: ClaudeClient = {
+  executeClaude
+};
 
 /**
  * Load developer instructions from various sources
@@ -49,12 +53,10 @@ function loadInstructions(): string {
 }
 
 /**
- * Build prompt for development task
+ * Build task-specific prompt without context
  */
-function buildPrompt(task: any, workItem: any): string {
-  const instructions = loadInstructions();
-  
-  let prompt = `${instructions}\n\n## Current Task\n\n${task.type}: ${workItem.name}`;
+function buildTaskPrompt(task: any, workItem: any): string {
+  let prompt = `## Current Task\n\n${task.type}: ${workItem.name}`;
   
   if (workItem.description) {
     prompt += `\n\n## Description\n\n${workItem.description}`;
@@ -76,7 +78,8 @@ function buildPrompt(task: any, workItem: any): string {
  */
 export async function processDevelopmentTask(
   taskId: number, 
-  db: Database.Database
+  db: Database.Database,
+  claudeClient: ClaudeClient = defaultClaudeClient
 ): Promise<ProcessResult> {
   try {
     // Get task and work item details
@@ -90,13 +93,15 @@ export async function processDevelopmentTask(
       return { success: false, error: 'Work item not found' };
     }
     
-    // Build and execute prompt
-    const prompt = buildPrompt(task, workItem);
+    // Build task prompt and context separately
+    const taskPrompt = buildTaskPrompt(task, workItem);
+    const systemPrompt = loadInstructions();
     
-    // Execute Claude with longer timeout for development tasks
-    const result = await realClaudeClient.executeClaude(prompt, { 
+    // Execute Claude with system prompt for context and task prompt for specific work
+    const result = await claudeClient.executeClaude(taskPrompt, { 
       verbose: true, 
-      timeout: 300000 // 5 minutes
+      timeout: 300000, // 5 minutes
+      systemPrompt
     }) as any;
     
     if (!result.success) {

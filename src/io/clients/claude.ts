@@ -10,6 +10,7 @@ interface ClaudeOptions {
   cwd?: string;
   verbose?: boolean;
   timeout?: number;
+  systemPrompt?: string;
 }
 
 /**
@@ -19,14 +20,21 @@ interface ClaudeOptions {
  * @param options.cwd - Working directory for the command
  * @param options.verbose - If true, returns full response object. If false (default), returns output string or throws error
  * @param options.timeout - Timeout in milliseconds (default: 5000)
+ * @param options.systemPrompt - Additional system prompt to append using --append-system-prompt flag
  * @returns Promise with output string (default) or full response object (if verbose=true)
  * @throws Error if command fails and verbose=false
  */
 export function executeClaude(prompt: string, options: ClaudeOptions = {}): Promise<string | ClaudeResponse> {
-  const { cwd = process.cwd(), verbose = false, timeout = 5000 } = options;
+  const { cwd = process.cwd(), verbose = false, timeout = 5000, systemPrompt } = options;
   
   return new Promise((resolve, reject) => {
     const args = ['-p', '--dangerously-skip-permissions', prompt];
+    
+    // Add system prompt if provided
+    if (systemPrompt) {
+      args.push('--append-system-prompt', systemPrompt);
+    }
+    
     const claudePath = process.env.HOME + '/.claude/local/claude';
     
     const claude = spawn(claudePath, args, {
@@ -52,7 +60,11 @@ export function executeClaude(prompt: string, options: ClaudeOptions = {}): Prom
       timedOut = true;
       
       try {
-        process.kill(-claude.pid, 'SIGKILL'); // Kill the process group
+        if (claude.pid) {
+          process.kill(-claude.pid, 'SIGKILL'); // Kill the process group
+        } else {
+          claude.kill('SIGKILL'); // Fallback to killing just the process
+        }
       } catch (err) {
         claude.kill('SIGKILL'); // Fallback to killing just the process
       }
