@@ -210,7 +210,7 @@ describe('Development Processor Integration Tests', () => {
       
       // Verify Claude execution options
       assert.strictEqual(options.verbose, true, 'Should use verbose mode');
-      assert.strictEqual(options.timeout, 300000, 'Should use 5 minute timeout');
+      assert.strictEqual(options.timeout, 600000, 'Should use 10 minute timeout');
       assert(options.systemPrompt, 'Should include system prompt');
     });
 

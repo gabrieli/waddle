@@ -7,6 +7,101 @@ import { processDevelopmentTask } from '../../processors/development-processor.t
 import { processTestingTask } from '../../processors/testing-processor.ts';
 import { processReviewTask } from '../../processors/review-processor.ts';
 
+/**
+ * Check if a task can be started (not running for less than 15 minutes)
+ */
+function canStartTask(task: any): boolean {
+  if (!task.started_at) {
+    return true;
+  }
+  
+  // Check if task started more than 15 minutes ago
+  const startedAt = new Date(task.started_at);
+  const now = new Date();
+  const fifteenMinutesAgo = new Date(now.getTime() - 15 * 60 * 1000);
+  
+  return startedAt < fifteenMinutesAgo;
+}
+
+/**
+ * Log task start
+ */
+function logTaskStart(taskId: number, taskType: string, workItemId: number): void {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] 🚀 Task ${taskId} (${taskType}) starting for work item ${workItemId}`);
+}
+
+/**
+ * Log task completion
+ */
+function logTaskCompletion(taskId: number, taskType: string, workItemId: number, success: boolean, summary?: string): void {
+  const timestamp = new Date().toISOString();
+  const status = success ? '✅' : '❌';
+  console.log(`[${timestamp}] ${status} Task ${taskId} (${taskType}) ${success ? 'completed' : 'failed'} for work item ${workItemId}`);
+  
+  if (summary) {
+    console.log(`[${timestamp}] 📝 Task ${taskId} summary:`);
+    // Indent each line of the summary
+    summary.split('\n').forEach(line => {
+      console.log(`[${timestamp}]    ${line}`);
+    });
+  }
+}
+
+/**
+ * Process task in background
+ */
+async function processTaskInBackground(taskId: number, taskType: string, database: Database.Database): Promise<void> {
+  try {
+    let result;
+    
+    switch (taskType) {
+      case 'development':
+        result = await processDevelopmentTask(taskId, database);
+        break;
+      case 'testing':
+        result = await processTestingTask(taskId, database);
+        break;
+      case 'review':
+        result = await processReviewTask(taskId, database);
+        break;
+      default:
+        result = { 
+          success: false, 
+          error: `Unknown task type: ${taskType}` 
+        };
+    }
+
+    // Get task details for logging
+    const task = database.prepare('SELECT * FROM tasks WHERE id = ?').get(taskId) as any;
+    
+    if (result.success) {
+      logTaskCompletion(taskId, taskType, task.user_story_id, true, result.summary);
+    } else {
+      // Mark task as failed
+      database.prepare(`
+        UPDATE tasks 
+        SET status = 'failed', summary = ?, completed_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(result.error || 'Task processing failed', taskId);
+      
+      logTaskCompletion(taskId, taskType, task.user_story_id, false, result.error);
+    }
+  } catch (error) {
+    // Handle unexpected errors
+    const task = database.prepare('SELECT * FROM tasks WHERE id = ?').get(taskId) as any;
+    const errorMessage = error.message || 'Unexpected error during task processing';
+    
+    database.prepare(`
+      UPDATE tasks 
+      SET status = 'failed', summary = ?, completed_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(errorMessage, taskId);
+    
+    logTaskCompletion(taskId, task?.type || 'unknown', task?.user_story_id || 0, false, errorMessage);
+  }
+}
+
 export interface TaskService {
   createTask(params: {
     type: string;
@@ -33,10 +128,6 @@ export function createTasksRouter(options: TasksRouterOptions): Router {
 
   // Process task
   router.post('/:taskId/process', async (req, res) => {
-    // Set 10-minute timeout for task processing
-    req.setTimeout(600000); // 10 minutes in milliseconds
-    res.setTimeout(600000);
-    
     try {
       const taskId = parseInt(req.params.taskId);
       const { wait = false } = req.body;
@@ -48,12 +139,29 @@ export function createTasksRouter(options: TasksRouterOptions): Router {
         });
       }
 
-      // Get task to determine type
-      const task = database.prepare('SELECT * FROM tasks WHERE id = ?').get(taskId);
+      // Get task to determine type and check status
+      const task = database.prepare('SELECT * FROM tasks WHERE id = ?').get(taskId) as any;
       if (!task) {
         return res.status(404).json({
           success: false,
           error: 'Task not found'
+        });
+      }
+
+      // Check if task can be started (15-minute lock)
+      if (task.status === 'in_progress' && !canStartTask(task)) {
+        return res.json({
+          success: true,
+          status: 'in_progress',
+          message: 'Task already running'
+        });
+      }
+
+      // Only allow processing of 'new', 'failed' tasks, or tasks that have been running for >15 minutes
+      if (task.status !== 'new' && task.status !== 'failed' && !canStartTask(task)) {
+        return res.status(400).json({
+          success: false,
+          error: `Cannot process task with status '${task.status}'`
         });
       }
 
@@ -66,26 +174,27 @@ export function createTasksRouter(options: TasksRouterOptions): Router {
         });
       }
 
-      // Process immediately based on task type
-      let result;
-      switch (task.type) {
-        case 'development':
-          result = await processDevelopmentTask(taskId, database);
-          break;
-        case 'testing':
-          result = await processTestingTask(taskId, database);
-          break;
-        case 'review':
-          result = await processReviewTask(taskId, database);
-          break;
-        default:
-          result = { 
-            success: false, 
-            error: `Unknown task type: ${task.type}` 
-          };
-      }
+      // Mark task as in_progress and set started_at
+      database.prepare(`
+        UPDATE tasks 
+        SET status = 'in_progress', started_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(taskId);
 
-      res.json(result);
+      // Log task start
+      logTaskStart(taskId, task.type, task.user_story_id);
+
+      // Start background processing (don't await)
+      processTaskInBackground(taskId, task.type, database).catch(error => {
+        console.error(`[${new Date().toISOString()}] ❌ Background processing error for task ${taskId}:`, error);
+      });
+
+      // Return immediately
+      res.json({
+        success: true,
+        status: 'in_progress',
+        message: 'Task processing started'
+      });
     } catch (error) {
       res.status(500).json({
         success: false,

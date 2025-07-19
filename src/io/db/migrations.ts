@@ -3,7 +3,7 @@ import Database from 'better-sqlite3';
 /**
  * Schema version information
  */
-export const CURRENT_SCHEMA_VERSION = 6;
+export const CURRENT_SCHEMA_VERSION = 7;
 
 /**
  * Migration interface
@@ -191,6 +191,37 @@ const migrations: Migration[] = [
       `INSERT INTO agents_new SELECT * FROM agents`,
       `DROP TABLE agents`,
       `ALTER TABLE agents_new RENAME TO agents`
+    ],
+    down: [
+      // SQLite doesn't support modifying CHECK constraints directly
+      '-- Cannot easily revert CHECK constraint changes in SQLite'
+    ]
+  },
+  {
+    version: 7,
+    name: 'add_failed_task_status',
+    up: [
+      // SQLite doesn't support modifying CHECK constraints directly
+      // We need to recreate the tasks table with new status constraint
+      `CREATE TABLE tasks_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_story_id INTEGER NOT NULL,
+        parent_task_id INTEGER,
+        type TEXT NOT NULL CHECK (type IN ('development', 'testing', 'review')),
+        status TEXT NOT NULL CHECK (status IN ('new', 'in_progress', 'done', 'failed')),
+        summary TEXT,
+        metadata TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        started_at TIMESTAMP,
+        completed_at TIMESTAMP,
+        branch_name TEXT,
+        wait BOOLEAN DEFAULT FALSE,
+        FOREIGN KEY (user_story_id) REFERENCES work_items(id),
+        FOREIGN KEY (parent_task_id) REFERENCES tasks(id)
+      )`,
+      `INSERT INTO tasks_new SELECT * FROM tasks`,
+      `DROP TABLE tasks`,
+      `ALTER TABLE tasks_new RENAME TO tasks`
     ],
     down: [
       // SQLite doesn't support modifying CHECK constraints directly

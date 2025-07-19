@@ -24,6 +24,7 @@ describe('Task Domain', () => {
       assert.strictEqual(isValidTaskStatus('new'), true);
       assert.strictEqual(isValidTaskStatus('in_progress'), true);
       assert.strictEqual(isValidTaskStatus('done'), true);
+      assert.strictEqual(isValidTaskStatus('failed'), true);
       assert.strictEqual(isValidTaskStatus('invalid'), false);
       assert.strictEqual(isValidTaskStatus(''), false);
       assert.strictEqual(isValidTaskStatus(null as any), false);
@@ -106,6 +107,7 @@ describe('Task Domain', () => {
       assert.strictEqual(TaskStatus.NEW, 'new');
       assert.strictEqual(TaskStatus.IN_PROGRESS, 'in_progress');
       assert.strictEqual(TaskStatus.DONE, 'done');
+      assert.strictEqual(TaskStatus.FAILED, 'failed');
     });
   });
 });

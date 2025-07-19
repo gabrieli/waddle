@@ -15,7 +15,8 @@ export type TaskType = typeof TaskType[keyof typeof TaskType];
 export const TaskStatus = {
   NEW: 'new',
   IN_PROGRESS: 'in_progress',
-  DONE: 'done'
+  DONE: 'done',
+  FAILED: 'failed'
 } as const;
 
 export type TaskStatus = typeof TaskStatus[keyof typeof TaskStatus];

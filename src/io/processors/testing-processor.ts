@@ -1,16 +1,16 @@
 /**
- * Testing Task Processor
+ * Testing Task Processor - Functional DI Pattern
  * 
- * Processes testing tasks by executing npm run test:all in the appropriate worktree
- * and creating follow-up tasks based on test results
+ * Processes testing tasks using dependency injection for test execution.
+ * Uses factory functions and higher-order functions for clean functional DI.
  */
 import { join } from 'path';
-import { exec } from 'child_process';
-import { promisify } from 'util';
 import Database from 'better-sqlite3';
 import { createTaskService } from '../services/task-service.ts';
-
-const execAsync = promisify(exec);
+import { 
+  type TestExecutor, 
+  createDefaultTestExecutor 
+} from './test-executors.ts';
 
 export interface ProcessResult {
   success: boolean;
@@ -19,11 +19,12 @@ export interface ProcessResult {
 }
 
 /**
- * Process a testing task by running npm run test:all
+ * Process a testing task using dependency injection for test execution
  */
 export async function processTestingTask(
   taskId: number, 
-  db: Database.Database
+  db: Database.Database,
+  testExecutor: TestExecutor = createDefaultTestExecutor()
 ): Promise<ProcessResult> {
   try {
     // Get task details
@@ -36,34 +37,16 @@ export async function processTestingTask(
       return { success: false, error: 'Task has no branch_name specified' };
     }
     
-    // Run npm run test:all in the worktree
+    // Execute tests using injected executor
     const worktreePath = join(process.cwd(), 'worktrees', task.branch_name);
     console.log(`Running tests in worktree: ${worktreePath}`);
     
-    let testsPassed = false;
-    let output = '';
-    let errorOutput = '';
+    const testResult = await testExecutor(worktreePath);
     
-    try {
-      const { stdout, stderr } = await execAsync('npm run test:all', {
-        cwd: worktreePath,
-        env: { ...process.env }
-      });
-      testsPassed = true;
-      output = stdout;
-      if (stderr) {
-        output += `\n\nWarnings:\n${stderr}`;
-      }
-    } catch (error) {
-      testsPassed = false;
-      output = error.stdout || '';
-      errorOutput = error.stderr || error.message;
-    }
-    
-    // Create summary
-    const summary = testsPassed 
-      ? `All tests passed successfully!\n\nTest Output:\n${output}`
-      : `Tests failed.\n\nTest Output:\n${output}\n\nError:\n${errorOutput}`;
+    // Create summary based on test result
+    const summary = testResult.passed 
+      ? `All tests passed successfully!\n\nTest Output:\n${testResult.output}`
+      : `Tests failed.\n\nTest Output:\n${testResult.output}${testResult.errorOutput ? `\n\nError:\n${testResult.errorOutput}` : ''}`;
     
     // Update task status
     db.prepare(`
@@ -75,7 +58,7 @@ export async function processTestingTask(
     // Create follow-up task
     const taskService = createTaskService(db);
     
-    if (testsPassed) {
+    if (testResult.passed) {
       // Tests passed - create review task
       await taskService.createTask({
         type: 'review',
@@ -93,7 +76,7 @@ export async function processTestingTask(
       
       // Add bug details to the development task
       if (result.success) {
-        const bugSummary = `Fix failing tests:\n\nThe recent changes have broken the tests. Please review the test failures below and fix the issues.\n\n${errorOutput || output}`;
+        const bugSummary = `Fix failing tests:\n\nThe recent changes have broken the tests. Please review the test failures below and fix the issues.\n\n${testResult.errorOutput || testResult.output}`;
         db.prepare(`
           UPDATE tasks 
           SET summary = ?
