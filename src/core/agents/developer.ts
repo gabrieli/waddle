@@ -56,7 +56,7 @@ export async function executeTask(task: DeveloperTask): Promise<TaskResult> {
     // Execute claude with the constructed prompt
     const result = execSync(`claude -p "${prompt.replace(/"/g, '\\"')}"`, {
       encoding: 'utf8',
-      timeout: 300000, // 5 minutes
+      timeout: 600000, // 10 minutes
       stdio: 'pipe'
     });
     

@@ -100,7 +100,7 @@ export async function processDevelopmentTask(
     // Execute Claude with system prompt for context and task prompt for specific work
     const result = await claudeClient.executeClaude(taskPrompt, { 
       verbose: true, 
-      timeout: 300000, // 5 minutes
+      timeout: 600000, // 10 minutes
       systemPrompt
     }) as any;
     
