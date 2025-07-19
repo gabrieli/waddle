@@ -5,6 +5,7 @@ import { Router } from 'express';
 import Database from 'better-sqlite3';
 import { processDevelopmentTask } from '../../processors/development-processor.ts';
 import { processTestingTask } from '../../processors/testing-processor.ts';
+import { processReviewTask } from '../../processors/review-processor.ts';
 
 export interface TaskService {
   createTask(params: {
@@ -75,11 +76,7 @@ export function createTasksRouter(options: TasksRouterOptions): Router {
           result = await processTestingTask(taskId, database);
           break;
         case 'review':
-          // TODO: Implement review processor
-          result = { 
-            success: false, 
-            error: 'Review processor not implemented yet' 
-          };
+          result = await processReviewTask(taskId, database);
           break;
         default:
           result = { 

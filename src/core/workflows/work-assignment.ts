@@ -4,7 +4,7 @@
 
 export interface Agent {
   id: number;
-  type: 'developer' | 'architect' | 'tester';
+  type: 'developer' | 'architect' | 'tester' | 'reviewer';
 }
 
 export interface AssignableWork {
@@ -19,7 +19,7 @@ export interface Assignment {
 }
 
 export interface AssignmentRule {
-  agentType: 'developer' | 'architect' | 'tester';
+  agentType: 'developer' | 'architect' | 'tester' | 'reviewer';
   workType: 'epic' | 'user_story' | 'bug';
   workStatus: 'new' | 'in_progress' | 'review' | 'done';
 }

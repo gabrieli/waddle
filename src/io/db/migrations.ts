@@ -3,7 +3,7 @@ import Database from 'better-sqlite3';
 /**
  * Schema version information
  */
-export const CURRENT_SCHEMA_VERSION = 5;
+export const CURRENT_SCHEMA_VERSION = 6;
 
 /**
  * Migration interface
@@ -150,6 +150,51 @@ const migrations: Migration[] = [
     down: [
       // SQLite doesn't support DROP COLUMN, so we'd need to recreate the table
       '-- Cannot easily drop column in SQLite'
+    ]
+  },
+  {
+    version: 6,
+    name: 'add_reviewer_agent_type',
+    up: [
+      // SQLite doesn't support modifying CHECK constraints directly
+      // We need to recreate tables with new constraints
+      `CREATE TABLE work_items_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('new', 'in_progress', 'review', 'done')),
+        description TEXT,
+        type TEXT NOT NULL CHECK (type IN ('epic', 'user_story', 'bug')),
+        assigned_to TEXT CHECK (assigned_to IN ('developer', 'architect', 'tester', 'reviewer')),
+        agent_id INTEGER,
+        parent_id INTEGER,
+        branch_name TEXT CHECK (branch_name LIKE 'feature/work-item-%-%' OR branch_name IS NULL),
+        worktree_path TEXT,
+        version INTEGER DEFAULT 1,
+        started_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (agent_id) REFERENCES agents(id),
+        FOREIGN KEY (parent_id) REFERENCES work_items(id)
+      )`,
+      `INSERT INTO work_items_new SELECT * FROM work_items`,
+      `DROP TABLE work_items`,
+      `ALTER TABLE work_items_new RENAME TO work_items`,
+      
+      `CREATE TABLE agents_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        type TEXT NOT NULL CHECK (type IN ('developer', 'architect', 'tester', 'reviewer')),
+        work_item_id INTEGER,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (work_item_id) REFERENCES work_items(id)
+      )`,
+      `INSERT INTO agents_new SELECT * FROM agents`,
+      `DROP TABLE agents`,
+      `ALTER TABLE agents_new RENAME TO agents`
+    ],
+    down: [
+      // SQLite doesn't support modifying CHECK constraints directly
+      '-- Cannot easily revert CHECK constraint changes in SQLite'
     ]
   }
 ];

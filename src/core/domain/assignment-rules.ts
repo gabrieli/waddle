@@ -14,5 +14,8 @@ export const standardAssignmentRules: AssignmentRule[] = [
   { agentType: 'developer', workType: 'user_story', workStatus: 'new' },
   
   // Testers handle user stories in review
-  { agentType: 'tester', workType: 'user_story', workStatus: 'review' }
+  { agentType: 'tester', workType: 'user_story', workStatus: 'review' },
+  
+  // Reviewers handle review tasks (note: this is for task-based workflow)
+  { agentType: 'reviewer', workType: 'user_story', workStatus: 'review' }
 ];
