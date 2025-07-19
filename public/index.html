@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Waddle 🐧 - Autonomous Development Workflow</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="header-left">
+                    <h1 class="logo">
+                        <span class="logo-icon">🐧</span>
+                        <span class="logo-text">Waddle</span>
+                    </h1>
+                    <div class="status-indicator" id="systemStatus">
+                        <div class="status-dot"></div>
+                        <span class="status-text">Initializing...</span>
+                    </div>
+                </div>
+                <div class="header-right">
+                    <button class="btn btn-primary" id="createWorkItemBtn">
+                        <span class="btn-icon">+</span>
+                        New Work Item
+                    </button>
+                    <button class="btn btn-secondary" id="schedulerToggle">
+                        <span class="scheduler-icon">⏸️</span>
+                        <span class="scheduler-text">Stop</span>
+                    </button>
+                    <button class="btn btn-ghost" id="viewLogsBtn">
+                        <span class="btn-icon">📋</span>
+                        Logs
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main">
+            <div class="dashboard-grid">
+                <!-- Work Items Board -->
+                <section class="work-items-section">
+                    <div class="section-header">
+                        <h2 class="section-title">Work Items</h2>
+                        <div class="section-actions">
+                            <select class="filter-select" id="workItemFilter">
+                                <option value="all">All Types</option>
+                                <option value="epic">Epics</option>
+                                <option value="user_story">Stories</option>
+                                <option value="bug">Bugs</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="kanban-board" id="workItemsBoard">
+                        <div class="kanban-column" data-status="new">
+                            <div class="column-header">
+                                <span class="column-title">New</span>
+                                <span class="column-count" id="newCount">0</span>
+                            </div>
+                            <div class="column-content" id="newColumn">
+                                <!-- Work item cards will be inserted here -->
+                            </div>
+                        </div>
+                        
+                        <div class="kanban-column" data-status="in_progress">
+                            <div class="column-header">
+                                <span class="column-title">In Progress</span>
+                                <span class="column-count" id="progressCount">0</span>
+                            </div>
+                            <div class="column-content" id="progressColumn">
+                                <!-- Work item cards will be inserted here -->
+                            </div>
+                        </div>
+                        
+                        <div class="kanban-column" data-status="review">
+                            <div class="column-header">
+                                <span class="column-title">Review</span>
+                                <span class="column-count" id="reviewCount">0</span>
+                            </div>
+                            <div class="column-content" id="reviewColumn">
+                                <!-- Work item cards will be inserted here -->
+                            </div>
+                        </div>
+                        
+                        <div class="kanban-column" data-status="done">
+                            <div class="column-header">
+                                <span class="column-title">Done</span>
+                                <span class="column-count" id="doneCount">0</span>
+                            </div>
+                            <div class="column-content" id="doneColumn">
+                                <!-- Work item cards will be inserted here -->
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Task Pipeline -->
+                <section class="task-pipeline-section">
+                    <div class="section-header">
+                        <h2 class="section-title">Task Pipeline</h2>
+                        <div class="pipeline-legend">
+                            <span class="legend-item">
+                                <span class="legend-dot dev"></span>
+                                Development
+                            </span>
+                            <span class="legend-item">
+                                <span class="legend-dot test"></span>
+                                Testing
+                            </span>
+                            <span class="legend-item">
+                                <span class="legend-dot review"></span>
+                                Review
+                            </span>
+                        </div>
+                    </div>
+                    <div class="task-pipeline" id="taskPipeline">
+                        <div class="pipeline-column" data-type="development">
+                            <div class="pipeline-header">
+                                <span class="pipeline-icon">⚡</span>
+                                <span class="pipeline-title">Development</span>
+                                <span class="pipeline-count" id="devTaskCount">0</span>
+                            </div>
+                            <div class="pipeline-content" id="devTasks">
+                                <!-- Development tasks -->
+                            </div>
+                        </div>
+                        
+                        <div class="pipeline-arrow">→</div>
+                        
+                        <div class="pipeline-column" data-type="testing">
+                            <div class="pipeline-header">
+                                <span class="pipeline-icon">🧪</span>
+                                <span class="pipeline-title">Testing</span>
+                                <span class="pipeline-count" id="testTaskCount">0</span>
+                            </div>
+                            <div class="pipeline-content" id="testTasks">
+                                <!-- Testing tasks -->
+                            </div>
+                        </div>
+                        
+                        <div class="pipeline-arrow">→</div>
+                        
+                        <div class="pipeline-column" data-type="review">
+                            <div class="pipeline-header">
+                                <span class="pipeline-icon">👁</span>
+                                <span class="pipeline-title">Review</span>
+                                <span class="pipeline-count" id="reviewTaskCount">0</span>
+                            </div>
+                            <div class="pipeline-content" id="reviewTasks">
+                                <!-- Review tasks -->
+                            </div>
+                        </div>
+                        
+                        <div class="pipeline-arrow">→</div>
+                        
+                        <div class="pipeline-column" data-type="done">
+                            <div class="pipeline-header">
+                                <span class="pipeline-icon">✅</span>
+                                <span class="pipeline-title">Complete</span>
+                                <span class="pipeline-count" id="completeTaskCount">0</span>
+                            </div>
+                            <div class="pipeline-content" id="completeTasks">
+                                <!-- Completed tasks -->
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Sidebar -->
+                <aside class="sidebar">
+                    <!-- Agent Status -->
+                    <div class="sidebar-section">
+                        <h3 class="sidebar-title">
+                            <span class="sidebar-icon">👥</span>
+                            Agents
+                        </h3>
+                        <div class="agent-list" id="agentList">
+                            <!-- Agent cards will be inserted here -->
+                        </div>
+                    </div>
+
+                    <!-- Activity Stream -->
+                    <div class="sidebar-section">
+                        <h3 class="sidebar-title">
+                            <span class="sidebar-icon">📊</span>
+                            Activity Stream
+                        </h3>
+                        <div class="activity-stream" id="activityStream">
+                            <!-- Activity items will be inserted here -->
+                        </div>
+                    </div>
+
+                    <!-- System Metrics -->
+                    <div class="sidebar-section">
+                        <h3 class="sidebar-title">
+                            <span class="sidebar-icon">📈</span>
+                            Metrics
+                        </h3>
+                        <div class="metrics-grid">
+                            <div class="metric-card">
+                                <div class="metric-value" id="totalWorkItems">0</div>
+                                <div class="metric-label">Work Items</div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-value" id="activeTasks">0</div>
+                                <div class="metric-label">Active Tasks</div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-value" id="completionRate">0%</div>
+                                <div class="metric-label">Completion</div>
+                            </div>
+                        </div>
+                    </div>
+                </aside>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <div class="modal-overlay" id="modalOverlay">
+        <!-- Create Work Item Modal -->
+        <div class="modal" id="createWorkItemModal">
+            <div class="modal-header">
+                <h3 class="modal-title">Create Work Item</h3>
+                <button class="modal-close" id="closeCreateModal">×</button>
+            </div>
+            <div class="modal-body">
+                <form id="createWorkItemForm">
+                    <div class="form-group">
+                        <label for="workItemName">Name</label>
+                        <input type="text" id="workItemName" name="name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="workItemDescription">Description</label>
+                        <textarea id="workItemDescription" name="description" required rows="3"></textarea>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="workItemType">Type</label>
+                            <select id="workItemType" name="type" required>
+                                <option value="">Select type...</option>
+                                <option value="epic">Epic</option>
+                                <option value="user_story">User Story</option>
+                                <option value="bug">Bug</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="workItemAssignee">Assigned To</label>
+                            <select id="workItemAssignee" name="assigned_to" required>
+                                <option value="">Select agent...</option>
+                                <option value="developer">Developer</option>
+                                <option value="architect">Architect</option>
+                                <option value="tester">Tester</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" id="cancelCreateBtn">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Create Work Item</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Activity Logs Modal -->
+        <div class="modal modal-large" id="activityLogsModal">
+            <div class="modal-header">
+                <h3 class="modal-title">System Activity Logs</h3>
+                <button class="modal-close" id="closeLogsModal">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="logs-container" id="logsContainer">
+                    <div class="logs-placeholder">
+                        <span class="logs-icon">📋</span>
+                        <p>Activity logs will appear here...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div class="toast-container" id="toastContainer">
+        <!-- Toasts will be inserted here -->
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

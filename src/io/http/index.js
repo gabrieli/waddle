@@ -251,6 +251,21 @@ const executeCommand = async (command, args = {}) => {
 const app = express();
 app.use(express.json());
 
+// Serve static files from public directory
+app.use(express.static('public'));
+
+// CORS middleware for development
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(200);
+  } else {
+    next();
+  }
+});
+
 // Logging middleware
 const logRequest = (req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
@@ -318,58 +333,6 @@ app.patch('/api/work-items/assignments', async (req, res) => {
   }
 });
 
-// Scheduler endpoints that actually control the scheduler
-app.get('/api/scheduler/status', async (req, res) => {
-  try {
-    const db = getDatabase();
-    const config = db.prepare('SELECT is_running, interval_seconds, last_run_at FROM scheduler_config WHERE id = 1').get();
-    res.json({ 
-      success: true, 
-      result: {
-        isRunning: Boolean(config.is_running),
-        intervalSeconds: config.interval_seconds,
-        lastRunAt: config.last_run_at
-      }
-    });
-  } catch (error) {
-    console.error(`[${new Date().toISOString()}] Error getting scheduler status:`, error.message);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.post('/api/scheduler/start', async (req, res) => {
-  try {
-    const db = getDatabase();
-    const started = startScheduler();
-    if (started) {
-      db.prepare('UPDATE scheduler_config SET is_running = 1, updated_at = CURRENT_TIMESTAMP WHERE id = 1').run();
-      console.log(`[${new Date().toISOString()}] 🚀 Scheduler started via API`);
-      res.json({ success: true, result: true });
-    } else {
-      res.json({ success: true, result: false, message: 'Scheduler already running' });
-    }
-  } catch (error) {
-    console.error(`[${new Date().toISOString()}] Error starting scheduler:`, error.message);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.post('/api/scheduler/stop', async (req, res) => {
-  try {
-    const db = getDatabase();
-    const stopped = stopScheduler();
-    if (stopped) {
-      db.prepare('UPDATE scheduler_config SET is_running = 0, updated_at = CURRENT_TIMESTAMP WHERE id = 1').run();
-      console.log(`[${new Date().toISOString()}] 🛑 Scheduler stopped via API`);
-      res.json({ success: true, result: true });
-    } else {
-      res.json({ success: true, result: false, message: 'Scheduler not running' });
-    }
-  } catch (error) {
-    console.error(`[${new Date().toISOString()}] Error stopping scheduler:`, error.message);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
 
 // Task management API endpoints
 const taskService = createTaskService(getDatabase());
@@ -385,6 +348,19 @@ import { createWorkItemsRouter } from './routes/work-items-api.ts';
 const workItemService = createWorkItemService(getDatabase());
 const workItemRouter = createWorkItemsRouter(workItemService);
 app.use('/api/work-items', workItemRouter);
+
+// Agents API endpoints
+import { createAgentsRouter } from './routes/agents.ts';
+const agentsRouter = createAgentsRouter(getDatabase());
+app.use('/api/agents', agentsRouter);
+
+// Scheduler API endpoints
+import { createSchedulerRouter } from './routes/scheduler.ts';
+const schedulerRouter = createSchedulerRouter(getDatabase(), {
+  startScheduler,
+  stopScheduler
+});
+app.use('/api/scheduler', schedulerRouter);
 
 // Start server
 const PORT = process.env.PORT || 3000;

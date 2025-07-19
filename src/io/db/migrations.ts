@@ -184,11 +184,13 @@ const migrations: Migration[] = [
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         type TEXT NOT NULL CHECK (type IN ('developer', 'architect', 'tester', 'reviewer')),
         work_item_id INTEGER,
+        version INTEGER DEFAULT 1,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (work_item_id) REFERENCES work_items(id)
       )`,
-      `INSERT INTO agents_new SELECT * FROM agents`,
+      `INSERT INTO agents_new (id, type, work_item_id, version, created_at) 
+       SELECT id, type, work_item_id, version, created_at FROM agents`,
       `DROP TABLE agents`,
       `ALTER TABLE agents_new RENAME TO agents`
     ],

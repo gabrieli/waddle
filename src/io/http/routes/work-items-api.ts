@@ -16,6 +16,20 @@ export interface WorkItemService {
     type: string;
     assigned_to: string;
   }>;
+  
+  getAllWorkItems(): Promise<{
+    success: boolean;
+    workItems: Array<{
+      id: number;
+      name: string;
+      description: string;
+      type: string;
+      status: string;
+      assigned_to: string;
+      created_at: string;
+      updated_at: string;
+    }>;
+  }>;
 }
 
 export function createWorkItemsRouter(service: WorkItemService): Router {
@@ -62,6 +76,19 @@ export function createWorkItemsRouter(service: WorkItemService): Router {
       res.json(result);
     } catch (error) {
       res.status(400).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  // Get all work items
+  router.get('/', async (req, res) => {
+    try {
+      const result = await service.getAllWorkItems();
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({
         success: false,
         error: error.message
       });

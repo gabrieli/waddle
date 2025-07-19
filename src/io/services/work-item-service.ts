@@ -53,6 +53,18 @@ export function createWorkItemService(db: Database.Database): WorkItemService {
         type,
         assigned_to
       };
+    },
+
+    async getAllWorkItems() {
+      const workItems = db.prepare(`
+        SELECT * FROM work_items 
+        ORDER BY created_at DESC
+      `).all();
+      
+      return {
+        success: true,
+        workItems
+      };
     }
   };
 }
