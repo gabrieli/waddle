@@ -304,6 +304,9 @@ class WaddleApp {
             failed: '❌'
         };
 
+        const canStart = task.status === 'new' || task.status === 'failed';
+        const isRunning = task.status === 'in_progress';
+        
         card.innerHTML = `
             <div class="task-title">${this.escapeHtml(task.work_item_name || `Task #${task.id}`)}</div>
             <div class="task-meta">
@@ -312,11 +315,36 @@ class WaddleApp {
                 </span>
                 <span class="task-id">#${task.id}</span>
             </div>
+            ${canStart ? `
+                <div class="task-actions">
+                    <button class="btn-task-start" data-task-id="${task.id}" data-task-type="${task.type}">
+                        ▶️ Start ${task.type}
+                    </button>
+                </div>
+            ` : ''}
+            ${isRunning ? `
+                <div class="task-progress">
+                    <div class="loading"></div>
+                    <span>Processing...</span>
+                </div>
+            ` : ''}
         `;
 
-        card.addEventListener('click', () => {
-            this.showTaskDetails(task);
+        // Add click handler for task details (but not on buttons)
+        card.addEventListener('click', (e) => {
+            if (!e.target.classList.contains('btn-task-start')) {
+                this.showTaskDetails(task);
+            }
         });
+
+        // Add click handler for start button
+        const startBtn = card.querySelector('.btn-task-start');
+        if (startBtn) {
+            startBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.startTask(task.id, task.type);
+            });
+        }
 
         return card;
     }
@@ -622,6 +650,40 @@ class WaddleApp {
 
         } catch (error) {
             console.error(`Error ${action}ing scheduler:`, error);
+            this.showToast(error.message, 'error');
+        }
+    }
+
+    async startTask(taskId, taskType) {
+        try {
+            this.showToast(`Starting ${taskType} task #${taskId}...`, 'info');
+            
+            const response = await fetch(`${this.baseUrl}/api/tasks/${taskId}/process`, {
+                method: 'POST'
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || `Failed to start task #${taskId}`);
+            }
+
+            const result = await response.json();
+            
+            if (result.status === 'in_progress') {
+                this.showToast(result.message || 'Task is already running', 'warning');
+            } else {
+                this.showToast(`${taskType} task #${taskId} started successfully!`, 'success');
+                
+                // Refresh data immediately to show updated status
+                await this.loadTasks();
+                await this.loadWorkItems();
+                this.renderTasks();
+                this.renderWorkItems();
+                this.renderMetrics();
+            }
+
+        } catch (error) {
+            console.error('Error starting task:', error);
             this.showToast(error.message, 'error');
         }
     }

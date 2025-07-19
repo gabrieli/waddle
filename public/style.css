@@ -534,6 +534,9 @@ body {
     font-size: 0.75rem;
     transition: var(--transition);
     position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
 }
 
 .task-card:hover {
@@ -602,6 +605,59 @@ body {
 .task-status[data-status="failed"] {
     background: var(--error-light);
     color: var(--error);
+}
+
+/* Task Actions */
+.task-actions {
+    margin-top: var(--space-2);
+}
+
+.btn-task-start {
+    background: var(--primary-600);
+    color: var(--text-inverse);
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: var(--space-1) var(--space-2);
+    font-size: 0.625rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition-colors);
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-1);
+}
+
+.btn-task-start:hover {
+    background: var(--primary-700);
+    transform: translateY(-1px);
+}
+
+.btn-task-start:active {
+    transform: translateY(0);
+}
+
+/* Task Progress */
+.task-progress {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2);
+    background: var(--warning-light);
+    border-radius: var(--radius-sm);
+    font-size: 0.625rem;
+    color: var(--warning);
+    font-weight: 500;
+}
+
+.task-progress .loading {
+    width: 12px;
+    height: 12px;
+}
+
+.task-progress span {
+    color: var(--warning);
 }
 
 /* Sidebar */

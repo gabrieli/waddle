@@ -8,10 +8,10 @@ import { createTaskService } from '../services/task-service.ts';
 // Global scheduler instance
 let schedulerInterval = null;
 
-// Scheduler logic with comprehensive logging
+// Scheduler logic - creates tasks directly for processors to handle
 const runSchedulerCycle = async () => {
   const timestamp = new Date().toISOString();
-  console.log(`[${timestamp}] 🔄 Scheduler: Starting assignment cycle...`);
+  console.log(`[${timestamp}] 🔄 Scheduler: Starting task creation cycle...`);
   
   try {
     const db = getDatabase();
@@ -19,70 +19,62 @@ const runSchedulerCycle = async () => {
     // Update last run time
     db.prepare('UPDATE scheduler_config SET last_run_at = CURRENT_TIMESTAMP WHERE id = 1').run();
     
-    // 1. Get available agents (those without work_item_id)
-    const availableAgents = db.prepare('SELECT id, type FROM agents WHERE work_item_id IS NULL').all();
-    console.log(`[${timestamp}] 👥 Available agents: ${availableAgents.length}`, 
-      availableAgents.map(a => `${a.type}(${a.id})`));
-    
-    // 2. Get assignable work items
-    const assignableWork = db.prepare(`
-      SELECT id, name, type, status 
-      FROM work_items 
-      WHERE status = 'new' AND agent_id IS NULL
+    // Get work items that need tasks created
+    const workItemsNeedingTasks = db.prepare(`
+      SELECT wi.id, wi.name, wi.type, wi.status 
+      FROM work_items wi
+      WHERE wi.status = 'new' 
+        AND NOT EXISTS (
+          SELECT 1 FROM tasks t 
+          WHERE t.user_story_id = wi.id 
+            AND t.status IN ('new', 'in_progress')
+        )
     `).all();
-    console.log(`[${timestamp}] 📋 Assignable work: ${assignableWork.length}`, 
-      assignableWork.map(w => `${w.type}:${w.id}`));
     
-    let assignments = 0;
+    console.log(`[${timestamp}] 📋 Work items needing tasks: ${workItemsNeedingTasks.length}`, 
+      workItemsNeedingTasks.map(w => `${w.type}:${w.id}`));
     
-    // 3. Assignment rules and matching
-    for (const agent of availableAgents) {
-      // Find work that matches this agent type
-      let workItem = null;
-      
-      if (agent.type === 'architect') {
-        workItem = assignableWork.find(w => w.type === 'epic' && w.status === 'new');
-      } else if (agent.type === 'developer') {
-        workItem = assignableWork.find(w => w.type === 'user_story' && w.status === 'new');
-      } else if (agent.type === 'tester') {
-        workItem = assignableWork.find(w => w.type === 'user_story' && w.status === 'review');
-      }
-      
-      if (workItem) {
-        // Make assignment
-        try {
-          db.prepare(`
-            UPDATE work_items 
-            SET agent_id = ?, status = 'in_progress', started_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-          `).run(agent.id, workItem.id);
-          
-          db.prepare(`
-            UPDATE agents 
-            SET work_item_id = ?, version = version + 1
-            WHERE id = ?
-          `).run(workItem.id, agent.id);
-          
-          console.log(`[${timestamp}] ✅ Assignment: ${agent.type}(${agent.id}) ← ${workItem.type}(${workItem.id}) "${workItem.name}"`);
-          assignments++;
-          
-          // Remove from available lists to prevent double assignment
-          const agentIndex = availableAgents.findIndex(a => a.id === agent.id);
-          if (agentIndex > -1) availableAgents.splice(agentIndex, 1);
-          
-          const workIndex = assignableWork.findIndex(w => w.id === workItem.id);
-          if (workIndex > -1) assignableWork.splice(workIndex, 1);
-          
-        } catch (error) {
-          console.error(`[${timestamp}] ❌ Assignment failed: ${agent.type}(${agent.id}) ← ${workItem.type}(${workItem.id}):`, error.message);
+    let tasksCreated = 0;
+    
+    // Create appropriate tasks for each work item
+    for (const workItem of workItemsNeedingTasks) {
+      try {
+        let taskType = null;
+        
+        // Determine task type based on work item type and status
+        if (workItem.type === 'epic') {
+          taskType = 'development'; // Architect work -> development tasks
+        } else if (workItem.type === 'user_story' && workItem.status === 'new') {
+          taskType = 'development';
+        } else if (workItem.type === 'user_story' && workItem.status === 'review') {
+          taskType = 'testing';
         }
+        
+        if (taskType) {
+          // Create task directly using task service
+          const result = await taskService.createTask({
+            type: taskType,
+            work_item_id: workItem.id,
+            branch_name: `feature/work-item-${workItem.id}`
+          });
+          
+          if (result.success) {
+            console.log(`[${timestamp}] ✅ Task created: ${taskType} task ${result.taskId} for ${workItem.type}(${workItem.id}) "${workItem.name}"`);
+            tasksCreated++;
+          } else {
+            console.error(`[${timestamp}] ❌ Task creation failed for ${workItem.type}(${workItem.id}):`, result.error || 'Unknown error');
+          }
+        }
+        
+      } catch (error) {
+        console.error(`[${timestamp}] ❌ Task creation failed for ${workItem.type}(${workItem.id}):`, error.message);
       }
     }
     
-    if (assignments === 0) {
-      console.log(`[${timestamp}] 😴 No assignments made - no matching work/agents available`);
+    if (tasksCreated === 0) {
+      console.log(`[${timestamp}] 😴 No tasks created - no work items need new tasks`);
     } else {
-      console.log(`[${timestamp}] 🎯 Scheduler cycle complete: ${assignments} assignments made`);
+      console.log(`[${timestamp}] 🎯 Scheduler cycle complete: ${tasksCreated} tasks created`);
     }
     
   } catch (error) {
@@ -189,40 +181,11 @@ const listItems = async (type = 'all') => {
   return { [type]: items[type] || [] };
 };
 
-// Agent management functions
+// Agent management functions (simplified - agents now only used for UI tracking)
 const deleteAllAgents = async () => {
   const db = getDatabase();
   const result = db.prepare('DELETE FROM agents').run();
   return { success: true, deletedCount: result.changes };
-};
-
-const createAgent = async (agentData) => {
-  const db = getDatabase();
-  const { type } = agentData;
-  
-  if (!['developer', 'architect', 'tester'].includes(type)) {
-    throw new Error(`Invalid agent type: ${type}`);
-  }
-  
-  const stmt = db.prepare(`
-    INSERT INTO agents (type, version) 
-    VALUES (?, 1)
-  `);
-  
-  const result = stmt.run(type);
-  return { success: true, id: result.lastInsertRowid };
-};
-
-const clearWorkItemAssignments = async () => {
-  const db = getDatabase();
-  const stmt = db.prepare(`
-    UPDATE work_items 
-    SET agent_id = NULL, started_at = NULL 
-    WHERE agent_id IS NOT NULL OR started_at IS NOT NULL
-  `);
-  
-  const result = stmt.run();
-  return { success: true, updatedCount: result.changes };
 };
 
 // Command registry
@@ -302,33 +265,13 @@ app.get('/commands', (req, res) => {
   });
 });
 
-// Agent management API endpoints
-app.delete('/api/agents', async (req, res) => {
+// Legacy agent management endpoint (kept for cleanup only)
+app.delete('/api/agents/all', async (req, res) => {
   try {
     const result = await deleteAllAgents();
     res.json(result);
   } catch (error) {
     console.error(`[${new Date().toISOString()}] Error deleting agents:`, error.message);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.post('/api/agents', async (req, res) => {
-  try {
-    const result = await createAgent(req.body);
-    res.json(result);
-  } catch (error) {
-    console.error(`[${new Date().toISOString()}] Error creating agent:`, error.message);
-    res.status(400).json({ success: false, error: error.message });
-  }
-});
-
-app.patch('/api/work-items/assignments', async (req, res) => {
-  try {
-    const result = await clearWorkItemAssignments();
-    res.json(result);
-  } catch (error) {
-    console.error(`[${new Date().toISOString()}] Error clearing work item assignments:`, error.message);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -369,12 +312,13 @@ const server = app.listen(PORT, async () => {
   console.log(`[${new Date().toISOString()}] Health: http://localhost:${PORT}/health`);
   console.log(`[${new Date().toISOString()}] Commands: http://localhost:${PORT}/commands`);
   
-  // Initialize agents on startup
+  // Initialize agents on startup (optional - only for UI status tracking)
   try {
     await initializeAgentsOnStartup();
+    console.log(`[${new Date().toISOString()}] Agents initialized for status tracking`);
   } catch (error) {
-    console.error(`[${new Date().toISOString()}] Failed to initialize agents:`, error.message);
-    // Don't exit the server, but log the error
+    console.warn(`[${new Date().toISOString()}] Agent initialization skipped (not critical):`, error.message);
+    // Agent initialization is no longer critical since processors handle execution
   }
 });
 
