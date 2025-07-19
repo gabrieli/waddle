@@ -8,7 +8,7 @@ export interface WorkItemService {
     name: string;
     description: string;
     type: 'epic' | 'user_story' | 'bug';
-    assigned_to: 'developer' | 'architect' | 'tester';
+    assigned_to: 'developer' | 'architect' | 'tester' | 'reviewer';
   }): Promise<{
     success: boolean;
     workItemId: number;
@@ -58,7 +58,7 @@ export function createWorkItemsRouter(service: WorkItemService): Router {
       }
 
       // Validate assigned_to
-      const validAssignees = ['developer', 'architect', 'tester'];
+      const validAssignees = ['developer', 'architect', 'tester', 'reviewer'];
       if (!validAssignees.includes(assigned_to)) {
         return res.status(400).json({
           success: false,

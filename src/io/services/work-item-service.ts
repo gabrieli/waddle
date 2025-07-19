@@ -13,7 +13,7 @@ export function createWorkItemService(db: Database.Database): WorkItemService {
       name: string;
       description: string;
       type: 'epic' | 'user_story' | 'bug';
-      assigned_to: 'developer' | 'architect' | 'tester';
+      assigned_to: 'developer' | 'architect' | 'tester' | 'reviewer';
     }) {
       const { name, description, type, assigned_to } = params;
       
@@ -38,6 +38,11 @@ export function createWorkItemService(db: Database.Database): WorkItemService {
         case 'tester':
           taskType = 'testing';
           break;
+        case 'reviewer':
+          taskType = 'review';
+          break;
+        default:
+          taskType = 'development'; // fallback
       }
       
       // Create the task automatically

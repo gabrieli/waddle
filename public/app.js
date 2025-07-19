@@ -10,7 +10,6 @@ class WaddleApp {
             workItems: [],
             tasks: [],
             agents: [],
-            schedulerStatus: null
         };
         this.refreshInterval = null;
         this.init();
@@ -29,9 +28,6 @@ class WaddleApp {
             this.showCreateWorkItemModal();
         });
 
-        document.getElementById('schedulerToggle').addEventListener('click', () => {
-            this.toggleScheduler();
-        });
 
         document.getElementById('viewLogsBtn').addEventListener('click', () => {
             this.showActivityLogsModal();
@@ -84,8 +80,7 @@ class WaddleApp {
             await Promise.all([
                 this.loadWorkItems(),
                 this.loadTasks(),
-                this.loadAgents(),
-                this.loadSchedulerStatus()
+                this.loadAgents()
             ]);
             this.renderAll();
         } catch (error) {
@@ -130,23 +125,11 @@ class WaddleApp {
         }
     }
 
-    async loadSchedulerStatus() {
-        try {
-            const response = await fetch(`${this.baseUrl}/api/scheduler/status`);
-            if (!response.ok) throw new Error('Failed to fetch scheduler status');
-            const result = await response.json();
-            this.data.schedulerStatus = result.status;
-        } catch (error) {
-            console.error('Error loading scheduler status:', error);
-            this.data.schedulerStatus = { isRunning: false, intervalSeconds: 30, lastRunAt: null };
-        }
-    }
 
     renderAll() {
         this.renderWorkItems();
         this.renderTasks();
         this.renderAgents();
-        this.renderSchedulerStatus();
         this.renderMetrics();
         this.renderActivityStream();
     }
@@ -398,23 +381,6 @@ class WaddleApp {
         return card;
     }
 
-    renderSchedulerStatus() {
-        const toggle = document.getElementById('schedulerToggle');
-        const icon = toggle.querySelector('.scheduler-icon');
-        const text = toggle.querySelector('.scheduler-text');
-        
-        if (this.data.schedulerStatus?.isRunning) {
-            icon.textContent = '⏸️';
-            text.textContent = 'Stop';
-            toggle.className = 'btn btn-secondary';
-            this.updateSystemStatus('running', 'Scheduler Running');
-        } else {
-            icon.textContent = '▶️';
-            text.textContent = 'Start';
-            toggle.className = 'btn btn-primary';
-            this.updateSystemStatus('warning', 'Scheduler Stopped');
-        }
-    }
 
     renderMetrics() {
         const totalWorkItems = this.data.workItems.length;
@@ -454,14 +420,6 @@ class WaddleApp {
         const activities = [];
         const now = new Date();
 
-        // Add scheduler activities
-        if (this.data.schedulerStatus?.lastRunAt) {
-            activities.push({
-                icon: '⚙️',
-                message: 'Scheduler completed assignment cycle',
-                time: this.data.schedulerStatus.lastRunAt
-            });
-        }
 
         // Add task activities
         this.data.tasks
@@ -628,31 +586,6 @@ class WaddleApp {
         }
     }
 
-    async toggleScheduler() {
-        const isRunning = this.data.schedulerStatus?.isRunning;
-        const action = isRunning ? 'stop' : 'start';
-
-        try {
-            const response = await fetch(`${this.baseUrl}/api/scheduler/${action}`, {
-                method: 'POST'
-            });
-
-            if (!response.ok) {
-                throw new Error(`Failed to ${action} scheduler`);
-            }
-
-            const result = await response.json();
-            this.showToast(result.message, 'success');
-            
-            // Refresh scheduler status
-            await this.loadSchedulerStatus();
-            this.renderSchedulerStatus();
-
-        } catch (error) {
-            console.error(`Error ${action}ing scheduler:`, error);
-            this.showToast(error.message, 'error');
-        }
-    }
 
     async startTask(taskId, taskType) {
         try {
