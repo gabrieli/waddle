@@ -3,7 +3,7 @@ import Database from 'better-sqlite3';
 /**
  * Schema version information
  */
-export const CURRENT_SCHEMA_VERSION = 7;
+export const CURRENT_SCHEMA_VERSION = 9;
 
 /**
  * Migration interface
@@ -184,11 +184,13 @@ const migrations: Migration[] = [
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         type TEXT NOT NULL CHECK (type IN ('developer', 'architect', 'tester', 'reviewer')),
         work_item_id INTEGER,
+        version INTEGER DEFAULT 1,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (work_item_id) REFERENCES work_items(id)
       )`,
-      `INSERT INTO agents_new SELECT * FROM agents`,
+      `INSERT INTO agents_new (id, type, work_item_id, version, created_at) 
+       SELECT id, type, work_item_id, version, created_at FROM agents`,
       `DROP TABLE agents`,
       `ALTER TABLE agents_new RENAME TO agents`
     ],
@@ -226,6 +228,92 @@ const migrations: Migration[] = [
     down: [
       // SQLite doesn't support modifying CHECK constraints directly
       '-- Cannot easily revert CHECK constraint changes in SQLite'
+    ]
+  },
+  {
+    version: 8,
+    name: 'remove_agent_assignment_system',
+    up: [
+      // Disable foreign key constraints during migration
+      `PRAGMA foreign_keys = OFF`,
+      
+      // Remove agent assignment fields - agents table kept for UI tracking only
+      `CREATE TABLE work_items_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('new', 'in_progress', 'review', 'done')),
+        description TEXT,
+        type TEXT NOT NULL CHECK (type IN ('epic', 'user_story', 'bug')),
+        parent_id INTEGER,
+        branch_name TEXT CHECK (branch_name LIKE 'feature/work-item-%-%' OR branch_name IS NULL),
+        worktree_path TEXT,
+        version INTEGER DEFAULT 1,
+        started_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (parent_id) REFERENCES work_items(id)
+      )`,
+      `INSERT INTO work_items_new (id, name, status, description, type, parent_id, branch_name, worktree_path, version, started_at, created_at, updated_at)
+       SELECT id, name, status, description, type, parent_id, branch_name, worktree_path, version, started_at, created_at, updated_at FROM work_items`,
+      `DROP TABLE work_items`,
+      `ALTER TABLE work_items_new RENAME TO work_items`,
+      
+      // Simplify agents table - remove work_item_id assignment tracking
+      `CREATE TABLE agents_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        type TEXT NOT NULL CHECK (type IN ('developer', 'architect', 'tester')),
+        version INTEGER DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`,
+      `INSERT INTO agents_new (id, type, version, created_at, updated_at)
+       SELECT id, type, version, created_at, COALESCE(updated_at, created_at) FROM agents`,
+      `DROP TABLE agents`,
+      `ALTER TABLE agents_new RENAME TO agents`,
+      
+      // Re-enable foreign key constraints
+      `PRAGMA foreign_keys = ON`
+    ],
+    down: [
+      // SQLite doesn't support adding constraints easily, complex rollback not implemented
+      '-- Cannot easily revert agent assignment system removal in SQLite'
+    ]
+  },
+  {
+    version: 9,
+    name: 'restore_assigned_to_field',
+    up: [
+      // Disable foreign key constraints during migration
+      `PRAGMA foreign_keys = OFF`,
+      
+      // Restore assigned_to field for task type determination
+      `CREATE TABLE work_items_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('new', 'in_progress', 'review', 'done')),
+        description TEXT,
+        type TEXT NOT NULL CHECK (type IN ('epic', 'user_story', 'bug')),
+        assigned_to TEXT CHECK (assigned_to IN ('developer', 'architect', 'tester', 'reviewer')),
+        parent_id INTEGER,
+        branch_name TEXT CHECK (branch_name LIKE 'feature/work-item-%-%' OR branch_name IS NULL),
+        worktree_path TEXT,
+        version INTEGER DEFAULT 1,
+        started_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (parent_id) REFERENCES work_items(id)
+      )`,
+      `INSERT INTO work_items_new (id, name, status, description, type, parent_id, branch_name, worktree_path, version, started_at, created_at, updated_at)
+       SELECT id, name, status, description, type, parent_id, branch_name, worktree_path, version, started_at, created_at, updated_at FROM work_items`,
+      `DROP TABLE work_items`,
+      `ALTER TABLE work_items_new RENAME TO work_items`,
+      
+      // Re-enable foreign key constraints
+      `PRAGMA foreign_keys = ON`
+    ],
+    down: [
+      // Remove assigned_to field again if needed
+      '-- Can remove assigned_to field by recreating table without it'
     ]
   }
 ];

@@ -111,13 +111,20 @@ export async function processDevelopmentTask(
       };
     }
     
-    // Update task status and summary
+    // Update task status and summary (preserve previous summary if exists)
+    const previousSummary = task.summary;
+    let newSummary = result.output;
+    
+    if (previousSummary && previousSummary.trim()) {
+      newSummary = `${previousSummary}\n\n--- Latest Progress ---\n\n${result.output}`;
+    }
+    
     const updateTask = db.prepare(`
       UPDATE tasks 
       SET status = 'done', summary = ?, completed_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `);
-    updateTask.run(result.output, taskId);
+    updateTask.run(newSummary, taskId);
     
     // Update work item status to in_progress
     const updateWorkItem = db.prepare(`

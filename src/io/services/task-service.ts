@@ -7,6 +7,7 @@
  */
 import Database from 'better-sqlite3';
 import type { TaskService } from '../http/routes/tasks.ts';
+import { getCurrentBranch } from '../../lib/git-utils.ts';
 
 export function createTaskService(db: Database.Database): TaskService {
   return {
@@ -109,13 +110,18 @@ export function createTaskService(db: Database.Database): TaskService {
         actualBranchName = workItem.branch_name;
       }
       
+      // Final fallback: use current git branch if still no branch name
+      if (!actualBranchName) {
+        actualBranchName = getCurrentBranch();
+      }
+      
       // Create the task (user_story_id column actually stores work_item_id)
       const insertTask = db.prepare(`
         INSERT INTO tasks (user_story_id, parent_task_id, type, status, branch_name, created_at)
         VALUES (?, ?, ?, 'new', ?, CURRENT_TIMESTAMP)
       `);
       
-      const result = insertTask.run(work_item_id, parent_task_id || null, type, actualBranchName || null);
+      const result = insertTask.run(work_item_id, parent_task_id || null, type, actualBranchName);
       
       return {
         success: true,

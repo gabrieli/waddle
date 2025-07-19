@@ -46,7 +46,7 @@ describe('Testing Processor', () => {
     cleanupDb();
   });
 
-  test('should handle missing branch_name gracefully', async () => {
+  test('should handle missing branch_name by using fallback', async () => {
     setupDb();
     
     // Create task without branch_name
@@ -58,8 +58,9 @@ describe('Testing Processor', () => {
     const mockExecutor = createMockTestExecutor();
     const result = await processTestingTask(2, db, mockExecutor);
     
-    assert.strictEqual(result.success, false);
-    assert.strictEqual(result.error, 'Task has no branch_name specified');
+    // Should succeed using fallback branch (current git branch)
+    assert.strictEqual(result.success, true);
+    assert(result.summary, 'Should have test summary');
     
     cleanupDb();
   });
@@ -142,6 +143,41 @@ describe('Testing Processor', () => {
     assert.strictEqual(result.success, true);
     assert(result.summary?.includes('feature/test-branch'));
     assert(result.summary?.includes('All tests passed!'));
+    
+    cleanupDb();
+  });
+
+  test('should preserve previous summary when restarting failed task', async () => {
+    setupDb();
+    
+    // Update the task to have a failed status with existing summary
+    db.prepare(`
+      UPDATE tasks 
+      SET status = 'failed', summary = 'Previous attempt failed: Database connection error'
+      WHERE id = 1
+    `).run();
+    
+    // Create custom executor that passes
+    const customExecutor = createCustomTestExecutor(async () => ({
+      passed: true,
+      output: 'All tests now pass after fixing database issue',
+      errorOutput: undefined
+    }));
+    
+    const result = await processTestingTask(1, db, customExecutor);
+    
+    assert.strictEqual(result.success, true);
+    
+    // Verify summary contains both previous and new information
+    assert(result.summary?.includes('Previous attempt failed: Database connection error'));
+    assert(result.summary?.includes('--- Latest Progress ---'));
+    assert(result.summary?.includes('All tests now pass after fixing database issue'));
+    
+    // Check database was updated correctly
+    const updatedTask = db.prepare('SELECT summary FROM tasks WHERE id = 1').get();
+    assert(updatedTask.summary.includes('Previous attempt failed: Database connection error'));
+    assert(updatedTask.summary.includes('--- Latest Progress ---'));
+    assert(updatedTask.summary.includes('All tests now pass after fixing database issue'));
     
     cleanupDb();
   });

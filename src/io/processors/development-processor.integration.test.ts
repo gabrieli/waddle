@@ -123,7 +123,7 @@ describe('Development Processor Integration Tests', () => {
     assert.strictEqual(result.error, 'Work item not found');
   });
 
-  it('should create testing task without branch name if original task has none', async () => {
+  it('should create testing task with fallback branch name if original task has none', async () => {
     // Create a task without branch name
     db.prepare(`
       INSERT INTO tasks (id, user_story_id, type, status, created_at)
@@ -134,10 +134,12 @@ describe('Development Processor Integration Tests', () => {
 
     assert.strictEqual(result.success, true);
 
-    // Verify testing task was created without branch name
+    // Verify testing task was created with fallback branch name
     const testingTask = db.prepare('SELECT * FROM tasks WHERE user_story_id = ? AND type = ? AND id != ?').get(1, 'testing', 1);
     assert(testingTask, 'Testing task should be created');
-    assert.strictEqual(testingTask.branch_name, null);
+    // Should use current git branch as fallback instead of null
+    assert.notStrictEqual(testingTask.branch_name, null, 'Testing task should have branch_name from fallback');
+    assert.strictEqual(typeof testingTask.branch_name, 'string', 'branch_name should be a string');
   });
 
   it('should include work item description in prompt building', async () => {

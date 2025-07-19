@@ -148,13 +148,20 @@ export async function processReviewTask(
       feedback = output.split('REVIEW OUTCOME: CHANGES REQUIRED')[0].trim();
     }
     
-    // Update task status and summary
+    // Update task status and summary (preserve previous summary if exists)
+    const previousSummary = task.summary;
+    let newSummary = output;
+    
+    if (previousSummary && previousSummary.trim()) {
+      newSummary = `${previousSummary}\n\n--- Latest Progress ---\n\n${output}`;
+    }
+    
     const updateTask = db.prepare(`
       UPDATE tasks 
       SET status = 'done', summary = ?, completed_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `);
-    updateTask.run(output, taskId);
+    updateTask.run(newSummary, taskId);
     
     // Create follow-up based on review outcome
     const taskService = createTaskService(db);

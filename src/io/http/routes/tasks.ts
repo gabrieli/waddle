@@ -271,5 +271,27 @@ export function createTasksRouter(options: TasksRouterOptions): Router {
     }
   });
 
+  // Get all tasks
+  router.get('/', async (req, res) => {
+    try {
+      const tasks = database.prepare(`
+        SELECT t.*, wi.name as work_item_name, wi.type as work_item_type
+        FROM tasks t
+        LEFT JOIN work_items wi ON t.user_story_id = wi.id
+        ORDER BY t.created_at DESC
+      `).all();
+      
+      res.json({
+        success: true,
+        tasks: tasks
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
   return router;
 }
