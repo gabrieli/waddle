@@ -178,11 +178,11 @@ describe('Work Item Service', () => {
       }
     });
 
-    it('should create task without branch name initially', async () => {
+    it('should create task with auto-generated branch name', async () => {
       // Create a work item that should create a task
       const result = await workItemService.createWorkItem({
-        name: 'Feature without branch',
-        description: 'Task should be created without branch name initially',
+        name: 'Feature with auto branch',
+        description: 'Task should be created with auto-generated branch name',
         type: 'user_story',
         assigned_to: 'developer'
       });
@@ -192,10 +192,14 @@ describe('Work Item Service', () => {
       
       // Verify task was created
       assert(task, 'Task should be created');
-      assert.strictEqual(task.branch_name, null, 'Task should not have branch name initially');
+      assert(task.branch_name, 'Task should have branch name');
+      assert(task.branch_name.startsWith('feature/work-item-'), 'Task branch name should follow convention');
       
-      // Work item also shouldn't have branch name initially
-      assert.strictEqual(workItem.branch_name, null, 'Work item should not have branch name initially');
+      // Work item should also have branch name
+      assert(workItem.branch_name, 'Work item should have branch name');
+      assert.strictEqual(workItem.branch_name, task.branch_name, 'Work item and task should have same branch name');
+      assert(workItem.worktree_path, 'Work item should have worktree path');
+      assert.strictEqual(workItem.worktree_path, `./worktrees/${workItem.branch_name}/`, 'Worktree path should be correct');
     });
   });
 });

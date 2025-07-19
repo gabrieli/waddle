@@ -6,6 +6,7 @@
  */
 import { join } from 'path';
 import Database from 'better-sqlite3';
+import { getCurrentBranch } from '../../lib/git-utils.ts';
 import { createTaskService } from '../services/task-service.ts';
 import { 
   type TestExecutor, 
@@ -33,20 +34,27 @@ export async function processTestingTask(
       return { success: false, error: 'Task not found' };
     }
     
-    if (!task.branch_name) {
-      return { success: false, error: 'Task has no branch_name specified' };
-    }
+    // Use task's branch_name or fallback to current git branch
+    const branchName = task.branch_name || getCurrentBranch();
     
     // Execute tests using injected executor
-    const worktreePath = join(process.cwd(), 'worktrees', task.branch_name);
+    const worktreePath = join(process.cwd(), 'worktrees', branchName);
     console.log(`Running tests in worktree: ${worktreePath}`);
     
     const testResult = await testExecutor(worktreePath);
     
     // Create summary based on test result
-    const summary = testResult.passed 
+    const newProgress = testResult.passed 
       ? `All tests passed successfully!\n\nTest Output:\n${testResult.output}`
       : `Tests failed.\n\nTest Output:\n${testResult.output}${testResult.errorOutput ? `\n\nError:\n${testResult.errorOutput}` : ''}`;
+    
+    // Preserve previous summary if exists
+    const previousSummary = task.summary;
+    let summary = newProgress;
+    
+    if (previousSummary && previousSummary.trim()) {
+      summary = `${previousSummary}\n\n--- Latest Progress ---\n\n${newProgress}`;
+    }
     
     // Update task status
     db.prepare(`
