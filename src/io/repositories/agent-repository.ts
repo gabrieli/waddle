@@ -39,14 +39,9 @@ const createAgent = (db: Database.Database) =>
   };
 
 const clearWorkItemAssignments = (db: Database.Database) => (): number => {
-  const stmt = db.prepare(`
-    UPDATE work_items 
-    SET agent_id = NULL, started_at = NULL 
-    WHERE agent_id IS NOT NULL OR started_at IS NOT NULL
-  `);
-  
-  const result = stmt.run();
-  return result.changes;
+  // Legacy function - work items no longer have agent assignments
+  // Return 0 since no assignments exist to clear
+  return 0;
 };
 
 /**

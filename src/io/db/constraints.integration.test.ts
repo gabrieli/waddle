@@ -1,5 +1,6 @@
 import { test, describe, beforeEach } from 'node:test';
 import assert from 'node:assert';
+import { unlinkSync } from 'node:fs';
 import { createDatabase, closeDatabase } from './database.ts';
 import { runMigrations } from './migrations.ts';
 
@@ -75,28 +76,28 @@ describe('Database Constraints', () => {
 
   describe('foreign key relationships', () => {
     test('should enforce foreign key relationships (prevent orphaned records)', () => {
-      // Try to insert work item with non-existent agent_id
+      // Try to insert work item with non-existent parent_id (the only FK relationship left)
       assert.throws(() => {
         db.prepare(`
-          INSERT INTO work_items (name, status, description, type, agent_id) 
+          INSERT INTO work_items (name, status, description, type, parent_id) 
           VALUES (?, ?, ?, ?, ?)
         `).run('Test Work', 'new', 'Test description', 'epic', 999);
       }, /FOREIGN KEY constraint failed/);
     });
 
     test('should allow valid foreign key relationships', () => {
-      // Create agent first
-      const agentResult = db.prepare(`
-        INSERT INTO agents (type) 
-        VALUES (?)
-      `).run('developer');
+      // Create parent work item first
+      const parentResult = db.prepare(`
+        INSERT INTO work_items (name, status, description, type) 
+        VALUES (?, ?, ?, ?)
+      `).run('Parent Work Item', 'new', 'Parent description', 'epic');
 
-      // Create work item with valid agent_id
+      // Create child work item with valid parent_id
       assert.doesNotThrow(() => {
         db.prepare(`
-          INSERT INTO work_items (name, status, description, type, agent_id) 
+          INSERT INTO work_items (name, status, description, type, parent_id) 
           VALUES (?, ?, ?, ?, ?)
-        `).run('Test Work', 'new', 'Test description', 'epic', agentResult.lastInsertRowid);
+        `).run('Child Work Item', 'new', 'Child description', 'user_story', parentResult.lastInsertRowid);
       });
     });
   });
@@ -147,7 +148,7 @@ describe('Database Constraints', () => {
       
       // Clean up test file
       try {
-        require('fs').unlinkSync('./data/waddle-test-temp.db');
+        unlinkSync('./data/waddle-test-temp.db');
       } catch (e) {
         // File might not exist, that's okay
       }

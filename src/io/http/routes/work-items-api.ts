@@ -8,13 +8,27 @@ export interface WorkItemService {
     name: string;
     description: string;
     type: 'epic' | 'user_story' | 'bug';
-    assigned_to: 'developer' | 'architect' | 'tester';
+    assigned_to: 'developer' | 'architect' | 'tester' | 'reviewer';
   }): Promise<{
     success: boolean;
     workItemId: number;
     name: string;
     type: string;
     assigned_to: string;
+  }>;
+  
+  getAllWorkItems(): Promise<{
+    success: boolean;
+    workItems: Array<{
+      id: number;
+      name: string;
+      description: string;
+      type: string;
+      status: string;
+      assigned_to: string;
+      created_at: string;
+      updated_at: string;
+    }>;
   }>;
 }
 
@@ -44,7 +58,7 @@ export function createWorkItemsRouter(service: WorkItemService): Router {
       }
 
       // Validate assigned_to
-      const validAssignees = ['developer', 'architect', 'tester'];
+      const validAssignees = ['developer', 'architect', 'tester', 'reviewer'];
       if (!validAssignees.includes(assigned_to)) {
         return res.status(400).json({
           success: false,
@@ -62,6 +76,19 @@ export function createWorkItemsRouter(service: WorkItemService): Router {
       res.json(result);
     } catch (error) {
       res.status(400).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  // Get all work items
+  router.get('/', async (req, res) => {
+    try {
+      const result = await service.getAllWorkItems();
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({
         success: false,
         error: error.message
       });

@@ -27,7 +27,7 @@ export async function initializeAgentsOnStartup(config?: StartupConfig): Promise
     // Initialize agents
     const result = await AgentInit.initializeAgents({
       agentRepository,
-      agentTypes: ['developer', 'architect', 'tester', 'reviewer']
+      agentTypes: ['developer', 'architect', 'tester']
     });
 
     if (!result.success) {
