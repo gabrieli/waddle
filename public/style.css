@@ -247,9 +247,10 @@ body {
 
 .dashboard-grid {
     display: grid;
-    grid-template-columns: 1fr 320px;
+    grid-template-columns: 1fr 380px;
     gap: var(--space-6);
-    height: calc(100vh - 64px - var(--space-12));
+    min-height: calc(100vh - 64px - var(--space-12));
+    height: auto;
 }
 
 /* Sections */
@@ -664,8 +665,11 @@ body {
 .sidebar {
     display: flex;
     flex-direction: column;
-    gap: var(--space-6);
+    gap: var(--space-5);
     overflow-y: auto;
+    min-height: 0;
+    flex: 1;
+    height: fit-content;
 }
 
 .sidebar-section {
@@ -673,7 +677,8 @@ body {
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     padding: var(--space-5);
-    overflow: hidden;
+    overflow: visible;
+    min-height: fit-content;
 }
 
 .sidebar-title {
@@ -695,6 +700,7 @@ body {
     display: flex;
     flex-direction: column;
     gap: var(--space-3);
+    min-height: fit-content;
 }
 
 .agent-card {
@@ -767,7 +773,8 @@ body {
     display: flex;
     flex-direction: column;
     gap: var(--space-3);
-    max-height: 300px;
+    min-height: 250px;
+    max-height: 500px;
     overflow-y: auto;
 }
 
@@ -808,6 +815,7 @@ body {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: var(--space-3);
+    min-height: fit-content;
 }
 
 .metric-card {
@@ -1139,7 +1147,7 @@ body {
     
     .sidebar-section {
         flex-shrink: 0;
-        min-width: 280px;
+        min-width: 320px;
     }
 }
 
