@@ -232,6 +232,23 @@ body {
     color: var(--text-primary);
 }
 
+.btn-danger {
+    background: var(--error);
+    color: var(--text-inverse);
+    border-color: var(--error);
+}
+
+.btn-danger:hover:not(:disabled) {
+    background: #dc2626;
+    border-color: #dc2626;
+}
+
+.btn-danger:disabled {
+    background: var(--border-secondary);
+    color: var(--text-tertiary);
+    border-color: var(--border-secondary);
+}
+
 .btn-icon {
     font-size: 1rem;
 }
@@ -1448,4 +1465,176 @@ textarea:focus-visible {
         grid-template-columns: 1fr;
         gap: var(--space-4);
     }
+}
+
+/* Delete Confirmation Modal Styles */
+.delete-confirmation {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+}
+
+.delete-warning {
+    display: flex;
+    gap: var(--space-4);
+    padding: var(--space-4);
+    background: var(--error-light);
+    border: 1px solid var(--error);
+    border-radius: var(--radius);
+}
+
+.warning-icon {
+    font-size: 2rem;
+    flex-shrink: 0;
+}
+
+.warning-content h4 {
+    margin: 0 0 var(--space-2) 0;
+    color: var(--error);
+    font-weight: 600;
+}
+
+.warning-content p {
+    margin: 0 0 var(--space-3) 0;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+}
+
+.delete-consequences {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.delete-consequences li {
+    padding: var(--space-1) 0;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    position: relative;
+    padding-left: var(--space-4);
+}
+
+.delete-consequences li::before {
+    content: '•';
+    position: absolute;
+    left: 0;
+    color: var(--error);
+    font-weight: bold;
+}
+
+.work-item-preview {
+    padding: var(--space-4);
+    background: var(--background-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.preview-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.preview-item:last-child {
+    border-bottom: none;
+}
+
+.preview-label {
+    font-weight: 500;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.preview-value {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+}
+
+.confirmation-input {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.confirmation-input label {
+    font-weight: 500;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+}
+
+.delete-confirmation-input {
+    padding: var(--space-3);
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    transition: var(--transition-colors);
+}
+
+.delete-confirmation-input:focus {
+    outline: none;
+    border-color: var(--error);
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+}
+
+.delete-confirmation-input.valid {
+    border-color: var(--success);
+    background: var(--success-light);
+}
+
+.confirmation-hint {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    padding: var(--space-1) var(--space-2);
+    background: var(--background-tertiary);
+    border-radius: var(--radius-sm);
+}
+
+.confirmation-hint strong {
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+}
+
+/* Delete button in work item cards */
+.work-item-actions {
+    position: absolute;
+    top: var(--space-2);
+    right: var(--space-2);
+    display: flex;
+    gap: var(--space-1);
+    opacity: 0;
+    transition: var(--transition);
+}
+
+.work-item-card:hover .work-item-actions {
+    opacity: 1;
+}
+
+.btn-delete {
+    background: var(--error);
+    color: var(--text-inverse);
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: var(--space-1);
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: var(--transition);
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-delete:hover {
+    background: #dc2626;
+    transform: scale(1.1);
+}
+
+.btn-delete:active {
+    transform: scale(0.95);
 }

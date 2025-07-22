@@ -34,6 +34,12 @@ export interface WorkItemService {
       updated_at: string;
     }>;
   }>;
+
+  deleteWorkItem(id: number): Promise<{
+    success: boolean;
+    message: string;
+    deletedTasks?: number;
+  }>;
 }
 
 export function createWorkItemsRouter(service: WorkItemService): Router {
@@ -93,6 +99,34 @@ export function createWorkItemsRouter(service: WorkItemService): Router {
   router.get('/', async (req, res) => {
     try {
       const result = await service.getAllWorkItems();
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  // Delete work item
+  router.delete('/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      
+      // Validate ID
+      if (isNaN(id) || id <= 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid work item ID. Must be a positive integer.'
+        });
+      }
+
+      const result = await service.deleteWorkItem(id);
+      
+      if (!result.success) {
+        return res.status(404).json(result);
+      }
+
       res.json(result);
     } catch (error) {
       res.status(500).json({

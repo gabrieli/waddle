@@ -46,6 +46,24 @@ class WaddleApp {
             this.hideModal('activityLogsModal');
         });
 
+        // Delete modal events
+        document.getElementById('closeDeleteModal').addEventListener('click', () => {
+            this.hideModal('deleteWorkItemModal');
+        });
+
+        document.getElementById('cancelDeleteBtn').addEventListener('click', () => {
+            this.hideModal('deleteWorkItemModal');
+        });
+
+        document.getElementById('confirmDeleteBtn').addEventListener('click', () => {
+            this.executeDelete();
+        });
+
+        // Delete confirmation input validation
+        document.getElementById('deleteConfirmation').addEventListener('input', (e) => {
+            this.validateDeleteConfirmation(e.target.value);
+        });
+
         document.getElementById('modalOverlay').addEventListener('click', (e) => {
             if (e.target === document.getElementById('modalOverlay')) {
                 this.hideAllModals();
@@ -190,6 +208,9 @@ class WaddleApp {
         };
 
         card.innerHTML = `
+            <div class="work-item-actions">
+                <button class="btn-delete" data-id="${item.id}" title="Delete work item">×</button>
+            </div>
             <div class="work-item-header">
                 <span class="work-item-type" data-type="${item.type}">
                     ${typeColors[item.type] || '📋'} ${item.type.replace('_', ' ')}
@@ -206,8 +227,20 @@ class WaddleApp {
             </div>
         `;
 
-        card.addEventListener('click', () => {
+        // Add click handler for the card (excluding the delete button)
+        card.addEventListener('click', (e) => {
+            // Prevent showing details when clicking the delete button
+            if (e.target.classList.contains('btn-delete')) {
+                return;
+            }
             this.showWorkItemDetails(item);
+        });
+
+        // Add delete button handler
+        const deleteBtn = card.querySelector('.btn-delete');
+        deleteBtn.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent card click
+            this.showDeleteConfirmation(item);
         });
 
         return card;
@@ -487,6 +520,49 @@ class WaddleApp {
         this.loadActivityLogs();
     }
 
+    showDeleteConfirmation(workItem) {
+        this.currentDeleteItem = workItem;
+        
+        // Populate the work item preview
+        const previewContainer = document.getElementById('deleteWorkItemPreview');
+        previewContainer.innerHTML = `
+            <div class="preview-item">
+                <span class="preview-label">Name:</span>
+                <span class="preview-value">${this.escapeHtml(workItem.name)}</span>
+            </div>
+            <div class="preview-item">
+                <span class="preview-label">Type:</span>
+                <span class="preview-value">${workItem.type.replace('_', ' ')}</span>
+            </div>
+            <div class="preview-item">
+                <span class="preview-label">Status:</span>
+                <span class="preview-value">${workItem.status}</span>
+            </div>
+            <div class="preview-item">
+                <span class="preview-label">Assigned to:</span>
+                <span class="preview-value">${workItem.assigned_to}</span>
+            </div>
+            <div class="preview-item">
+                <span class="preview-label">Created:</span>
+                <span class="preview-value">${this.formatDate(workItem.created_at)}</span>
+            </div>
+        `;
+
+        // Set expected name for confirmation
+        document.getElementById('expectedName').textContent = workItem.name;
+        
+        // Clear previous input
+        const confirmationInput = document.getElementById('deleteConfirmation');
+        confirmationInput.value = '';
+        confirmationInput.classList.remove('valid');
+        
+        // Disable confirm button
+        document.getElementById('confirmDeleteBtn').disabled = true;
+        
+        this.showModal('deleteWorkItemModal');
+        confirmationInput.focus();
+    }
+
     showModal(modalId) {
         const overlay = document.getElementById('modalOverlay');
         const modal = document.getElementById(modalId);
@@ -519,6 +595,73 @@ class WaddleApp {
         setTimeout(() => {
             overlay.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
         }, 150);
+    }
+
+    validateDeleteConfirmation(inputValue) {
+        const expectedName = this.currentDeleteItem?.name || '';
+        const confirmButton = document.getElementById('confirmDeleteBtn');
+        const confirmationInput = document.getElementById('deleteConfirmation');
+        
+        const isValid = inputValue.trim() === expectedName;
+        
+        if (isValid) {
+            confirmationInput.classList.add('valid');
+            confirmButton.disabled = false;
+        } else {
+            confirmationInput.classList.remove('valid');
+            confirmButton.disabled = true;
+        }
+    }
+
+    async executeDelete() {
+        if (!this.currentDeleteItem) {
+            this.showToast('Error: No work item selected for deletion', 'error');
+            return;
+        }
+
+        const workItem = this.currentDeleteItem;
+        const confirmButton = document.getElementById('confirmDeleteBtn');
+        
+        // Show loading state
+        confirmButton.innerHTML = '<span class="loading"></span> Deleting...';
+        confirmButton.disabled = true;
+
+        try {
+            const response = await fetch(`/api/work-items/${workItem.id}`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                this.showToast(result.message, 'success');
+                
+                // Remove the work item from data
+                this.data.workItems = this.data.workItems.filter(item => item.id !== workItem.id);
+                
+                // Re-render the work items board
+                this.renderWorkItems();
+                this.renderMetrics();
+                
+                // Hide the modal
+                this.hideModal('deleteWorkItemModal');
+                
+                // Clear current delete item
+                this.currentDeleteItem = null;
+            } else {
+                this.showToast(result.message || 'Failed to delete work item', 'error');
+            }
+        } catch (error) {
+            this.showToast('Network error: Failed to delete work item', 'error');
+            console.error('Delete error:', error);
+        } finally {
+            // Restore button state
+            confirmButton.innerHTML = 'Delete Work Item';
+            confirmButton.disabled = false;
+        }
     }
 
     async loadActivityLogs() {

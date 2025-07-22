@@ -327,6 +327,50 @@
                 </div>
             </div>
         </div>
+
+        <!-- Delete Work Item Confirmation Modal -->
+        <div class="modal" id="deleteWorkItemModal">
+            <div class="modal-header">
+                <h3 class="modal-title">Delete Work Item</h3>
+                <button class="modal-close" id="closeDeleteModal">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="delete-confirmation">
+                    <div class="delete-warning">
+                        <span class="warning-icon">⚠️</span>
+                        <div class="warning-content">
+                            <h4>This action cannot be undone</h4>
+                            <p>Deleting this work item will permanently remove:</p>
+                            <ul class="delete-consequences">
+                                <li>The work item and all its data</li>
+                                <li>All associated tasks</li>
+                                <li>All state transition history</li>
+                                <li>Any child work items will be orphaned</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <div class="work-item-preview" id="deleteWorkItemPreview">
+                        <!-- Work item details will be inserted here -->
+                    </div>
+                    
+                    <div class="confirmation-input">
+                        <label for="deleteConfirmation">
+                            Type the work item name to confirm deletion:
+                        </label>
+                        <input type="text" id="deleteConfirmation" class="delete-confirmation-input" autocomplete="off">
+                        <div class="confirmation-hint" id="confirmationHint">
+                            Type: <strong id="expectedName"></strong>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="cancelDeleteBtn">Cancel</button>
+                    <button type="button" class="btn btn-danger" id="confirmDeleteBtn" disabled>Delete Work Item</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Toast Notifications -->

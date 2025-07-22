@@ -115,6 +115,68 @@ export function createWorkItemService(db: Database.Database): WorkItemService {
         success: true,
         workItems
       };
+    },
+
+    async deleteWorkItem(id: number) {
+      // Use transaction to ensure all deletions are atomic
+      const transaction = db.transaction(() => {
+        // First, check if the work item exists
+        const workItem = db.prepare('SELECT * FROM work_items WHERE id = ?').get(id);
+        if (!workItem) {
+          return {
+            success: false,
+            message: `Work item with ID ${id} not found.`
+          };
+        }
+
+        // Count associated tasks before deletion
+        const taskCount = db.prepare(
+          'SELECT COUNT(*) as count FROM tasks WHERE user_story_id = ?'
+        ).get(id) as { count: number };
+
+        // Delete associated tasks first (cascade deletion)
+        const deleteTasksResult = db.prepare(
+          'DELETE FROM tasks WHERE user_story_id = ?'
+        ).run(id);
+
+        // Delete state transitions for this work item
+        const deleteTransitionsResult = db.prepare(
+          'DELETE FROM state_transitions WHERE work_item_id = ?'
+        ).run(id);
+
+        // Check for child work items and handle them
+        const childWorkItems = db.prepare(
+          'SELECT id, name FROM work_items WHERE parent_id = ?'
+        ).all(id);
+
+        if (childWorkItems.length > 0) {
+          // Set parent_id to null for child work items to avoid orphaning them
+          const updateChildrenResult = db.prepare(
+            'UPDATE work_items SET parent_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE parent_id = ?'
+          ).run(id);
+        }
+
+        // Finally, delete the work item itself
+        const deleteWorkItemResult = db.prepare(
+          'DELETE FROM work_items WHERE id = ?'
+        ).run(id);
+
+        return {
+          success: true,
+          message: `Successfully deleted work item "${workItem.name}" and ${taskCount.count} associated tasks.`,
+          deletedTasks: taskCount.count,
+          orphanedChildren: childWorkItems.length
+        };
+      });
+
+      try {
+        return transaction();
+      } catch (error) {
+        return {
+          success: false,
+          message: `Failed to delete work item: ${error.message}`
+        };
+      }
     }
   };
 }
