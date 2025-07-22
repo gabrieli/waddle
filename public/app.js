@@ -240,7 +240,9 @@ class WaddleApp {
         const deleteBtn = card.querySelector('.btn-delete');
         deleteBtn.addEventListener('click', (e) => {
             e.stopPropagation(); // Prevent card click
-            this.showDeleteConfirmation(item);
+            // Bypass confirmation modal - delete directly
+            this.currentDeleteItem = item;
+            this.executeDelete();
         });
 
         return card;
