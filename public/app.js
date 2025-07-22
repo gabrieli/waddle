@@ -138,7 +138,6 @@ class WaddleApp {
         const columns = {
             new: document.getElementById('newColumn'),
             in_progress: document.getElementById('progressColumn'),
-            review: document.getElementById('reviewColumn'),
             done: document.getElementById('doneColumn')
         };
 
@@ -169,7 +168,6 @@ class WaddleApp {
         // Update counts
         document.getElementById('newCount').textContent = (groupedItems.new || []).length;
         document.getElementById('progressCount').textContent = (groupedItems.in_progress || []).length;
-        document.getElementById('reviewCount').textContent = (groupedItems.review || []).length;
         document.getElementById('doneCount').textContent = (groupedItems.done || []).length;
     }
 
