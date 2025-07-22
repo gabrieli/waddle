@@ -35,16 +35,16 @@ export function createWorkItemService(db: Database.Database): WorkItemService {
       
       if (create_new_branch || !branch_name) {
         if (custom_branch_name) {
-          // Process custom branch name from frontend (expects clean format like "feature/my-branch")
+          // Process custom branch name from frontend for NEW branch creation
           if (custom_branch_name.startsWith('feature/work-item-')) {
-            // Already follows the database pattern, use as-is
+            // Already follows the work-item pattern, use as-is
             finalBranchName = custom_branch_name;
           } else if (custom_branch_name.startsWith('feature/')) {
-            // Clean branch name from frontend - convert to database format
+            // Clean branch name from frontend - convert to work-item format for new branches
             const slug = custom_branch_name.replace('feature/', '');
             finalBranchName = generateBranchName(workItemId, slug);
           } else {
-            // Raw slug provided - generate proper branch name
+            // Raw slug provided - generate proper branch name for new branches
             const slug = custom_branch_name.toLowerCase().replace(/[^a-z0-9]/g, '-').substring(0, 20);
             finalBranchName = generateBranchName(workItemId, slug);
           }
@@ -54,7 +54,7 @@ export function createWorkItemService(db: Database.Database): WorkItemService {
           finalBranchName = generateBranchName(workItemId, slug);
         }
       } else {
-        // Use existing branch selected by user
+        // Use existing branch selected by user - allow any branch name (main, develop, etc.)
         finalBranchName = branch_name;
       }
       
