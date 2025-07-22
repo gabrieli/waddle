@@ -480,6 +480,8 @@ class WaddleApp {
     showCreateWorkItemModal() {
         this.showModal('createWorkItemModal');
         document.getElementById('workItemName').focus();
+        this.loadBranchOptions();
+        this.setupBranchSelection();
     }
 
     showActivityLogsModal() {
@@ -550,11 +552,153 @@ class WaddleApp {
         }, 500);
     }
 
+    // Branch Selection Methods
+    async loadBranchOptions() {
+        try {
+            const response = await fetch(`${this.baseUrl}/api/branches/local`);
+            if (!response.ok) throw new Error('Failed to fetch branches');
+            
+            const result = await response.json();
+            const select = document.getElementById('existingBranchSelect');
+            
+            // Clear existing options except the first one
+            select.innerHTML = '<option value="">Select a branch...</option>';
+            
+            // Add branches to select
+            result.branches.forEach(branch => {
+                const option = document.createElement('option');
+                option.value = branch;
+                option.textContent = branch;
+                select.appendChild(option);
+            });
+        } catch (error) {
+            console.error('Error loading branches:', error);
+            this.showToast('Failed to load branches', 'error');
+        }
+    }
+
+    setupBranchSelection() {
+        const newBranchRadio = document.getElementById('newBranchRadio');
+        const existingBranchRadio = document.getElementById('existingBranchRadio');
+        const newBranchCard = document.querySelector('label[for="newBranchRadio"]');
+        const existingBranchCard = document.querySelector('label[for="existingBranchRadio"]');
+        const newBranchInput = document.getElementById('newBranchName');
+        const existingBranchSelect = document.getElementById('existingBranchSelect');
+        const nameInput = document.getElementById('workItemName');
+
+        let isUserEditingBranchName = false;
+
+        // Generate branch name slug from work item name
+        const generateBranchSlug = (name) => {
+            return name.toLowerCase()
+                       .replace(/[^a-z0-9\s-]/g, '') // Remove special characters except spaces and hyphens
+                       .replace(/\s+/g, '-')         // Replace spaces with hyphens
+                       .replace(/-+/g, '-')          // Replace multiple hyphens with single hyphen
+                       .replace(/^-|-$/g, '');       // Remove leading/trailing hyphens
+        };
+
+        // Handle card selection visual states
+        const updateCardStates = () => {
+            if (newBranchRadio.checked) {
+                newBranchCard.classList.add('active');
+                existingBranchCard.classList.remove('active');
+                newBranchInput.disabled = false;
+                existingBranchSelect.disabled = true;
+                this.updateBranchPlaceholder();
+            } else {
+                newBranchCard.classList.remove('active');
+                existingBranchCard.classList.add('active');
+                newBranchInput.disabled = true;
+                existingBranchSelect.disabled = false;
+            }
+        };
+
+        // Update branch name placeholder based on work item name
+        const updateBranchPlaceholder = () => {
+            const name = nameInput.value.trim();
+            if (name && newBranchRadio.checked) {
+                const slug = generateBranchSlug(name);
+                // Show clean branch name to user (backend will add work-item-ID for database compliance)
+                const suggestedBranch = slug ? `feature/${slug}` : 'feature/branch-name';
+                newBranchInput.placeholder = suggestedBranch;
+                
+                // Auto-fill the input if user hasn't manually edited it
+                if (!isUserEditingBranchName) {
+                    newBranchInput.value = suggestedBranch;
+                }
+            } else {
+                newBranchInput.placeholder = 'feature/branch-name';
+                if (!isUserEditingBranchName) {
+                    newBranchInput.value = '';
+                }
+            }
+        };
+
+        this.updateBranchPlaceholder = updateBranchPlaceholder;
+
+        // Track when user manually edits the branch name
+        newBranchInput.addEventListener('input', (e) => {
+            isUserEditingBranchName = true;
+            // If user clears the field, reset to auto-generated mode
+            if (e.target.value === '') {
+                isUserEditingBranchName = false;
+                updateBranchPlaceholder();
+            }
+        });
+
+        // Reset user editing state when they focus on the input and it's empty
+        newBranchInput.addEventListener('focus', () => {
+            if (newBranchInput.value === '' || newBranchInput.value === newBranchInput.placeholder) {
+                isUserEditingBranchName = false;
+                updateBranchPlaceholder();
+            }
+        });
+
+        // Event listeners for radio buttons
+        newBranchRadio.addEventListener('change', () => {
+            isUserEditingBranchName = false; // Reset editing state when switching
+            updateCardStates();
+        });
+        
+        existingBranchRadio.addEventListener('change', updateCardStates);
+        
+        // Event listener for work item name changes
+        nameInput.addEventListener('input', () => {
+            // Only update if user hasn't manually edited the branch name
+            if (!isUserEditingBranchName && newBranchRadio.checked) {
+                updateBranchPlaceholder();
+            }
+        });
+
+        // Initialize states
+        updateCardStates();
+    }
+
     // API Actions
     async createWorkItem() {
         const form = document.getElementById('createWorkItemForm');
         const formData = new FormData(form);
         const data = Object.fromEntries(formData);
+
+        // Handle branch selection
+        const branchOption = document.querySelector('input[name="branch_option"]:checked').value;
+        if (branchOption === 'new') {
+            data.create_new_branch = true;
+            // Get the custom branch name if user has entered one
+            const customBranchName = document.getElementById('newBranchName').value.trim();
+            if (customBranchName) {
+                data.custom_branch_name = customBranchName;
+            }
+        } else {
+            data.branch_name = document.getElementById('existingBranchSelect').value;
+            data.create_new_branch = false;
+            
+            // Validate that a branch is selected
+            if (!data.branch_name) {
+                this.showToast('Please select a branch or choose to create a new one', 'error');
+                return;
+            }
+        }
 
         try {
             const response = await fetch(`${this.baseUrl}/api/work-items`, {

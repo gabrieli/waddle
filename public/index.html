@@ -257,6 +257,63 @@
                             </select>
                         </div>
                     </div>
+                    
+                    <!-- Branch Selection Section -->
+                    <div class="form-group">
+                        <label class="section-label">
+                            <span class="label-icon">🌿</span>
+                            Branch Selection
+                        </label>
+                        <div class="branch-selection-modern">
+                            <div class="branch-options">
+                                <!-- New Branch Option -->
+                                <div class="branch-option" data-option="new">
+                                    <input type="radio" id="newBranchRadio" name="branch_option" value="new" checked hidden>
+                                    <label for="newBranchRadio" class="branch-option-card active">
+                                        <div class="option-header">
+                                            <div class="option-icon new-branch">
+                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                                                    <path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                                </svg>
+                                            </div>
+                                            <div class="option-content">
+                                                <h4>Create New Branch</h4>
+                                                <p>Generate a new feature branch</p>
+                                            </div>
+                                        </div>
+                                        <div class="branch-preview">
+                                            <div class="preview-label">Branch name:</div>
+                                            <input type="text" id="newBranchName" class="branch-name-input" placeholder="feature/branch-name">
+                                        </div>
+                                    </label>
+                                </div>
+
+                                <!-- Existing Branch Option -->
+                                <div class="branch-option" data-option="existing">
+                                    <input type="radio" id="existingBranchRadio" name="branch_option" value="existing" hidden>
+                                    <label for="existingBranchRadio" class="branch-option-card">
+                                        <div class="option-header">
+                                            <div class="option-icon existing-branch">
+                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                                                    <path d="M6 3V15M18 9L12 15L6 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                                </svg>
+                                            </div>
+                                            <div class="option-content">
+                                                <h4>Use Existing Branch</h4>
+                                                <p>Select from available branches</p>
+                                            </div>
+                                        </div>
+                                        <div class="branch-selector">
+                                            <select id="existingBranchSelect" name="existing_branch" disabled>
+                                                <option value="">Select a branch...</option>
+                                            </select>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div class="form-actions">
                         <button type="button" class="btn btn-secondary" id="cancelCreateBtn">Cancel</button>
                         <button type="submit" class="btn btn-primary">Create Work Item</button>

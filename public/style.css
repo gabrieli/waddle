@@ -1190,6 +1190,227 @@ body {
     }
 }
 
+/* Modern Branch Selection Styles */
+.section-label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: var(--space-3);
+}
+
+.label-icon {
+    font-size: 1.125rem;
+}
+
+.branch-selection-modern {
+    margin-top: var(--space-3);
+}
+
+.branch-options {
+    display: grid;
+    gap: var(--space-3);
+}
+
+.branch-option-card {
+    display: block;
+    padding: var(--space-4);
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.branch-option-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: transparent;
+    transition: all 0.3s ease;
+}
+
+.branch-option-card:hover {
+    border-color: var(--primary-300);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.branch-option-card.active {
+    border-color: var(--primary-500);
+    background: linear-gradient(135deg, var(--surface) 0%, rgba(59, 130, 246, 0.05) 100%);
+}
+
+.branch-option-card.active::before {
+    background: linear-gradient(90deg, var(--primary-500), var(--primary-400));
+}
+
+.option-header {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+}
+
+.option-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.2s ease;
+}
+
+.option-icon.new-branch {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+}
+
+.option-icon.existing-branch {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: white;
+}
+
+.branch-option-card.active .option-icon {
+    transform: scale(1.05);
+}
+
+.option-content {
+    flex: 1;
+}
+
+.option-content h4 {
+    margin: 0 0 var(--space-1) 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.option-content p {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.branch-preview {
+    background: var(--background-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: var(--space-3);
+    margin-top: var(--space-2);
+}
+
+.preview-label {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-tertiary);
+    margin-bottom: var(--space-1);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.branch-name-input {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    background: var(--surface);
+    padding: var(--space-2);
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    width: 100%;
+    transition: all 0.2s ease;
+}
+
+.branch-name-input:focus {
+    outline: none;
+    border-color: var(--primary-500);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.branch-name-input:disabled {
+    background: var(--background-secondary);
+    color: var(--text-tertiary);
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.branch-name-input::placeholder {
+    color: var(--text-tertiary);
+    font-style: italic;
+}
+
+.branch-selector {
+    margin-top: var(--space-2);
+}
+
+.branch-selector select {
+    width: 100%;
+    padding: var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    transition: all 0.2s ease;
+}
+
+.branch-selector select:focus {
+    outline: none;
+    border-color: var(--primary-500);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.branch-selector select:disabled {
+    background: var(--background-secondary);
+    color: var(--text-tertiary);
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+/* Animation for selection change */
+.branch-option-card {
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .branch-options {
+        gap: var(--space-2);
+    }
+    
+    .branch-option-card {
+        padding: var(--space-3);
+    }
+    
+    .option-header {
+        gap: var(--space-2);
+    }
+    
+    .option-icon {
+        width: 36px;
+        height: 36px;
+    }
+}
+
 /* Accessibility */
 @media (prefers-reduced-motion: reduce) {
     * {

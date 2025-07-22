@@ -9,12 +9,16 @@ export interface WorkItemService {
     description: string;
     type: 'epic' | 'user_story' | 'bug';
     assigned_to: 'developer' | 'architect' | 'tester' | 'reviewer';
+    branch_name?: string;
+    create_new_branch?: boolean;
+    custom_branch_name?: string;
   }): Promise<{
     success: boolean;
     workItemId: number;
     name: string;
     type: string;
     assigned_to: string;
+    branch_name?: string;
   }>;
   
   getAllWorkItems(): Promise<{
@@ -38,7 +42,7 @@ export function createWorkItemsRouter(service: WorkItemService): Router {
   // Create work item
   router.post('/', async (req, res) => {
     try {
-      const { name, description, type, assigned_to } = req.body;
+      const { name, description, type, assigned_to, branch_name, create_new_branch, custom_branch_name } = req.body;
 
       // Validate required fields
       if (!name || !description || !type || !assigned_to) {
@@ -70,7 +74,10 @@ export function createWorkItemsRouter(service: WorkItemService): Router {
         name,
         description,
         type,
-        assigned_to
+        assigned_to,
+        branch_name,
+        create_new_branch,
+        custom_branch_name
       });
       
       res.json(result);

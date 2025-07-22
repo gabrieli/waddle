@@ -305,6 +305,11 @@ const schedulerRouter = createSchedulerRouter(getDatabase(), {
 });
 app.use('/api/scheduler', schedulerRouter);
 
+// Branches API endpoints
+import { createBranchesRouter } from './routes/branches.ts';
+const branchesRouter = createBranchesRouter();
+app.use('/api/branches', branchesRouter);
+
 // Start server
 const PORT = process.env.PORT || 3000;
 const server = app.listen(PORT, async () => {

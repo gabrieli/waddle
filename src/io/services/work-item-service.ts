@@ -15,8 +15,11 @@ export function createWorkItemService(db: Database.Database): WorkItemService {
       description: string;
       type: 'epic' | 'user_story' | 'bug';
       assigned_to: 'developer' | 'architect' | 'tester' | 'reviewer';
+      branch_name?: string;
+      create_new_branch?: boolean;
+      custom_branch_name?: string;
     }) {
-      const { name, description, type, assigned_to } = params;
+      const { name, description, type, assigned_to, branch_name, create_new_branch, custom_branch_name } = params;
       
       // Create the work item first to get ID
       const insertWorkItem = db.prepare(`
@@ -27,10 +30,35 @@ export function createWorkItemService(db: Database.Database): WorkItemService {
       const result = insertWorkItem.run(name, description, type, assigned_to);
       const workItemId = result.lastInsertRowid as number;
       
-      // Generate branch name and worktree path based on work item ID and name
-      const slug = name.toLowerCase().replace(/[^a-z0-9]/g, '-').substring(0, 20);
-      const branchName = generateBranchName(workItemId, slug);
-      const worktreePath = `./worktrees/${branchName}/`;
+      // Determine branch name based on user selection
+      let finalBranchName: string;
+      
+      if (create_new_branch || !branch_name) {
+        if (custom_branch_name) {
+          // Process custom branch name from frontend (expects clean format like "feature/my-branch")
+          if (custom_branch_name.startsWith('feature/work-item-')) {
+            // Already follows the database pattern, use as-is
+            finalBranchName = custom_branch_name;
+          } else if (custom_branch_name.startsWith('feature/')) {
+            // Clean branch name from frontend - convert to database format
+            const slug = custom_branch_name.replace('feature/', '');
+            finalBranchName = generateBranchName(workItemId, slug);
+          } else {
+            // Raw slug provided - generate proper branch name
+            const slug = custom_branch_name.toLowerCase().replace(/[^a-z0-9]/g, '-').substring(0, 20);
+            finalBranchName = generateBranchName(workItemId, slug);
+          }
+        } else {
+          // Generate new branch name from work item name
+          const slug = name.toLowerCase().replace(/[^a-z0-9]/g, '-').substring(0, 20);
+          finalBranchName = generateBranchName(workItemId, slug);
+        }
+      } else {
+        // Use existing branch selected by user
+        finalBranchName = branch_name;
+      }
+      
+      const worktreePath = `./worktrees/${finalBranchName}/`;
       
       // Update work item with branch information
       const updateWorkItem = db.prepare(`
@@ -39,7 +67,7 @@ export function createWorkItemService(db: Database.Database): WorkItemService {
         WHERE id = ?
       `);
       
-      updateWorkItem.run(branchName, worktreePath, workItemId);
+      updateWorkItem.run(finalBranchName, worktreePath, workItemId);
       
       // Determine task type based on assigned_to
       let taskType: string;
@@ -64,7 +92,7 @@ export function createWorkItemService(db: Database.Database): WorkItemService {
       await taskService.createTask({
         type: taskType,
         work_item_id: workItemId,
-        branch_name: branchName
+        branch_name: finalBranchName
       });
       
       return {
@@ -72,7 +100,8 @@ export function createWorkItemService(db: Database.Database): WorkItemService {
         workItemId,
         name,
         type,
-        assigned_to
+        assigned_to,
+        branch_name: finalBranchName
       };
     },
 

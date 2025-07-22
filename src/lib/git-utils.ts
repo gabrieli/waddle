@@ -34,3 +34,24 @@ export function branchExists(branchName: string): boolean {
     return false;
   }
 }
+
+/**
+ * Get all local git branches
+ */
+export function getLocalBranches(): string[] {
+  try {
+    const output = execSync('git branch --format="%(refname:short)"', { 
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore']
+    }).trim();
+    
+    if (!output) {
+      return [];
+    }
+    
+    return output.split('\n').map(branch => branch.trim()).filter(Boolean);
+  } catch (error) {
+    console.warn('Failed to get local git branches:', error);
+    return [];
+  }
+}
