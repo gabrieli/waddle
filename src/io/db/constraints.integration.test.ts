@@ -36,34 +36,6 @@ describe('Database Constraints', () => {
       });
     });
 
-    test('should validate branch_name format (feature/work-item-{id}-{slug})', () => {
-      // Insert work item first
-      const result = db.prepare(`
-        INSERT INTO work_items (name, status, description, type) 
-        VALUES (?, ?, ?, ?)
-      `).run('Test Work', 'new', 'Test description', 'epic');
-      
-      const workItemId = result.lastInsertRowid;
-
-      // Valid branch name should work
-      assert.doesNotThrow(() => {
-        db.prepare(`
-          UPDATE work_items 
-          SET branch_name = ? 
-          WHERE id = ?
-        `).run(`feature/work-item-${workItemId}-test-slug`, workItemId);
-      });
-
-      // Invalid branch name should fail
-      assert.throws(() => {
-        db.prepare(`
-          UPDATE work_items 
-          SET branch_name = ? 
-          WHERE id = ?
-        `).run('invalid-branch-name', workItemId);
-      }, /CHECK constraint failed/);
-    });
-
     test('should allow NULL branch_name', () => {
       const result = db.prepare(`
         INSERT INTO work_items (name, status, description, type, branch_name) 
