@@ -264,7 +264,7 @@ body {
 
 .dashboard-grid {
     display: grid;
-    grid-template-columns: 1fr 380px;
+    grid-template-columns: 1fr; /* Single column layout with sidebar hidden */
     gap: var(--space-6);
     min-height: calc(100vh - 64px - var(--space-12));
     height: auto;
@@ -680,7 +680,7 @@ body {
 
 /* Sidebar */
 .sidebar {
-    display: flex;
+    display: none; /* Hidden but not removed */
     flex-direction: column;
     gap: var(--space-5);
     overflow-y: auto;
